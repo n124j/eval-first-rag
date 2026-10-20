@@ -280,7 +280,9 @@ prompt reads as text to continue.
 **Round 2.** Moving the example into real user/assistant turns changed the behaviour the most
 of any round. Header and label echo went to 0. Completions are short: 343 completion tokens
 against 2809 in round 0, and latency fell about fivefold. 5 completions use the exact
-`[id: "quote"]` form. But the model now over-refuses: 10 of 12 answerable questions get the
+`[id: "quote"]` form, but only 2 of those 5 are on answerable items (d001, d009). The other 3
+are on unanswerable items (d015, d016, d017), where a citation does not count. The model also
+over-refuses: 10 of 12 answerable questions get the
 refusal text. The last example turn was the refusal, and the model imitates the most recent turn.
 The two answerable citations both fail verification. d001 rewrote the corpus's `"limit_denominator()"`
 as `'limit_denominator()'`. d009 invented a regular expression as the "quote". The 5 refusals of
@@ -326,8 +328,8 @@ adopted (see Rejected).
   (`DEFAULT_TOP_K` in `src/evalrag/config.py`). The `eval` and `refresh-recordings` commands now
   take `--k` from the `TOP_K` setting unless it is given, so the pipeline and the metrics use the
   same k. The parser is unchanged from v0, because the round 3 parser change was not part of the
-  winner. A replay of the round 2 recordings through the committed code reproduced the round 2
-  metrics and report byte for byte.
+  winner. That the committed code reproduces the round 2 metrics was verified locally against
+  the scratch recordings (not committed).
 - Known cost of the winner: on the dev set it refuses 10 of 12 answerable questions. Its
   `correct_refusal_rate` of 0.625 must not be read as the prompt "learning to abstain".
 - **The 1B model is judged insufficient for this citation format.** The winner's
@@ -357,6 +359,16 @@ adopted (see Rejected).
 - The result on the golden set is still unmeasured. Nothing in this ADR is a golden-set claim.
 - I did not find a dev item that I believe is wrong. The two multi items are limited by
   retrieval (`shutil` and `csv` never reach the top 5), not by the item.
+- **Prompt-format injection.** The question and the retrieved chunk text are untrusted and are
+  interpolated into the prompt. `build_messages` now collapses all whitespace in both to single
+  spaces, so neither can start a new line with `Source id:`, `Text:`, `Question:` or `Answer:`
+  and forge a source block or a pre-filled answer across lines. Real prompts are unchanged,
+  because `chunk_document` already emits single-spaced text and the dev questions are
+  single-line. That was verified locally against the scratch recordings (not committed). Marker
+  text inline within one line (for example a question that contains
+  `... Answer: Not found in the provided documents.`) is still possible, and layout alone cannot
+  remove it. The corpus is trusted and the API is for local use only, so this remaining risk is
+  accepted.
 
 ## Rejected
 
@@ -378,3 +390,17 @@ adopted (see Rejected).
   chunk ids, which is one more step for a 1B model and needs a parser change. Not tried.
 - **Abstention or a score threshold.** Out of scope; a separate later task.
 - **A larger model.** Out of scope without the director's approval; recommended above.
+
+## Addendum 2026-10-20: decision
+
+- All four rounds, and the baseline, scored 0.0 valid citations on the dev set. On that basis
+  the director approved evaluating a 7B to 8B instruction-tuned model, using the same dev-set
+  procedure, before the golden set is touched.
+- The committed configuration (round 2 prompt and few-shot turns, `top_k` 3) is the
+  **starting point** for that evaluation. It is not a claimed improvement: on the 1B model it
+  produces no valid citations and over-refuses.
+- Over-refusal is now measured directly by a new metric, `over_refusal_rate` (refused
+  answerable items divided by all answerable items; lower is better; NaN without answerable
+  items). Recomputed from the round 2 dev recordings (verified locally against the scratch
+  recordings, not committed), round 2 has an `over_refusal_rate` of 0.8333 (10 of 12). The
+  table above predates the metric and keeps the original eight.
