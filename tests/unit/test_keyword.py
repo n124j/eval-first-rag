@@ -133,3 +133,35 @@ def test_operator_words_are_treated_as_plain_terms(index):
 def test_unicode_query(index):
     index.add([make("a#000", "café über naïve"), make("b#000", "plain")])
     assert [h.chunk_id for h in index.search("Café", 5)] == ["a#000"]
+
+
+def test_keyword_index_check_same_thread_false_allows_cross_thread_use(tmp_path: Path):
+    import threading
+
+    idx = KeywordIndex(tmp_path / "x.db", check_same_thread=False)
+    idx.add([make("a#000", "alpha beta gamma")])
+    out: list[int] = []
+    t = threading.Thread(target=lambda: out.append(len(idx.search("alpha", 3))))
+    t.start()
+    t.join()
+    idx.close()
+    assert out == [1]
+
+
+def test_keyword_index_default_rejects_cross_thread_use(tmp_path: Path):
+    import threading
+
+    idx = KeywordIndex(tmp_path / "y.db")
+    errors: list[BaseException] = []
+
+    def work() -> None:
+        try:
+            idx.count()
+        except sqlite3.Error as exc:
+            errors.append(exc)
+
+    t = threading.Thread(target=work)
+    t.start()
+    t.join()
+    idx.close()
+    assert len(errors) == 1 and isinstance(errors[0], sqlite3.ProgrammingError)

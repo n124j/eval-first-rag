@@ -16,6 +16,10 @@ def _required(env: Mapping[str, str], key: str) -> str:
     return value
 
 
+def _endpoint(env: Mapping[str, str], key: str, required: bool) -> str:
+    return _required(env, key) if required else env.get(key, "")
+
+
 def _int(env: Mapping[str, str], key: str, default: int, minimum: int) -> int:
     raw = env.get(key)
     if raw is None or raw.strip() == "":
@@ -41,12 +45,12 @@ class Settings:
     chunk_overlap: int = 40
 
     @classmethod
-    def from_env(cls, env: Mapping[str, str]) -> "Settings":
+    def from_env(cls, env: Mapping[str, str], require_endpoints: bool = True) -> "Settings":
         settings = cls(
-            llm_base_url=_required(env, "LLM_BASE_URL"),
-            llm_model=_required(env, "LLM_MODEL"),
-            embed_base_url=_required(env, "EMBED_BASE_URL"),
-            embed_model=_required(env, "EMBED_MODEL"),
+            llm_base_url=_endpoint(env, "LLM_BASE_URL", require_endpoints),
+            llm_model=_endpoint(env, "LLM_MODEL", require_endpoints),
+            embed_base_url=_endpoint(env, "EMBED_BASE_URL", require_endpoints),
+            embed_model=_endpoint(env, "EMBED_MODEL", require_endpoints),
             data_dir=Path(env.get("DATA_DIR") or "data"),
             top_k=_int(env, "TOP_K", 5, 1),
             chunk_size=_int(env, "CHUNK_SIZE", 200, 1),

@@ -16,8 +16,8 @@ def _fts_query(query: str) -> str:
 
 
 class KeywordIndex:
-    def __init__(self, db_path: Path) -> None:
-        self._conn = sqlite3.connect(str(db_path))
+    def __init__(self, db_path: Path, *, check_same_thread: bool = True) -> None:
+        self._conn = sqlite3.connect(str(db_path), check_same_thread=check_same_thread)
         self._conn.execute(
             "CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5("
             "chunk_id UNINDEXED, text, tokenize='porter unicode61')"

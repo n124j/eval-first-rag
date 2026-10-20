@@ -76,3 +76,13 @@ def test_settings_is_frozen():
     s = Settings.from_env(dict(REQUIRED))
     with pytest.raises(dataclasses.FrozenInstanceError):
         s.top_k = 9  # type: ignore[misc]
+
+
+def test_settings_require_endpoints_false_defaults_to_empty_strings():
+    s = Settings.from_env({"TOP_K": "3"}, require_endpoints=False)
+    assert (s.llm_base_url, s.llm_model, s.embed_base_url, s.embed_model) == ("", "", "", "")
+    assert s.top_k == 3
+    with pytest.raises(ConfigError):
+        Settings.from_env({"TOP_K": "0"}, require_endpoints=False)
+    with pytest.raises(ConfigError):
+        Settings.from_env({}, require_endpoints=True)
