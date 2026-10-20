@@ -40,7 +40,11 @@ FEW_SHOT = (
     ("How do I paint a widget blue?", _EXAMPLE_REFUSAL_CHUNKS, REFUSAL_TEXT),
 )
 
-_CITATION_RE = re.compile(r'\[([\w.\-]+#\d{3}):\s*"([^"]+)"\]')
+# The quote may contain double quotes, because the corpus wraps identifiers in them
+# ("Fraction"). It runs to the first `"]` on the same line and never contains `"]`, so an
+# empty quote cannot swallow the next citation. verify_citations still requires the quote
+# (at least MIN_QUOTE_CHARS) to occur in the cited retrieved chunk. See ADR 0005, 12h.
+_CITATION_RE = re.compile(r'\[([\w.\-]+#\d{3}):\s*"((?:(?!"\]).)+?)"\]')
 _WS_RE = re.compile(r"\s+")
 
 

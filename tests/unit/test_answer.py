@@ -334,8 +334,41 @@ def test_parse_citations_ignores_curly_quotes():
     assert parse_citations("[a#001: “curly quoted text”]") == []
 
 
-def test_parse_citations_ignores_inner_double_quote():
-    assert parse_citations('[a#001: "has "inner" quotes"]') == []
+def test_parse_citations_keeps_inner_double_quotes():
+    # The corpus wraps identifiers in double quotes; a verbatim quote must survive parsing.
+    assert parse_citations('[a#001: "has "inner" quotes"]') == [
+        Citation("a#001", 'has "inner" quotes')
+    ]
+    assert parse_citations('[a#001: "a corresponding "Match""]') == [
+        Citation("a#001", 'a corresponding "Match"')
+    ]
+
+
+def test_parse_citations_inner_quote_ends_at_first_quote_bracket():
+    text = '[a#001: "the "x" value"] and then [b#002: "the "y" value"]'
+    assert parse_citations(text) == [
+        Citation("a#001", 'the "x" value'),
+        Citation("b#002", 'the "y" value'),
+    ]
+
+
+def test_parse_citations_empty_quote_does_not_swallow_next_citation():
+    text = '[a#001: ""] [b#002: "real quote here"]'
+    assert parse_citations(text) == [Citation("b#002", "real quote here")]
+
+
+def test_parse_citations_does_not_span_lines():
+    assert parse_citations('[a#001: "starts here\nends here"]') == []
+
+
+def test_inner_quote_citation_still_needs_exact_occurrence():
+    corpus_style = chunk("fractions#003", 'Finds and returns the closest "Fraction" to "self".')
+    good = parse_citations('[fractions#003: "the closest "Fraction" to "self""]')
+    assert verify_citations(good, [corpus_style]).valid is True
+    # single quotes in place of the corpus's double quotes are not an exact copy
+    bad = parse_citations("[fractions#003: \"the closest 'Fraction' to 'self'\"]")
+    assert bad == [Citation("fractions#003", "the closest 'Fraction' to 'self'")]
+    assert verify_citations(bad, [corpus_style]).valid is False
 
 
 def test_parse_citations_inside_code_span_is_found():
