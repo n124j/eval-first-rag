@@ -470,7 +470,11 @@ The few-shot turns and the user-message layout in 8B-1 are the round 2 ones.
 now contain `"`. It ends at the first `"]` on the same line and never contains `"]`, so an empty
 quote cannot swallow the next citation. `verify_citations` is unchanged: the id must be among
 the retrieved chunks, and the quote must be at least 8 normalised characters and occur in that
-chunk.
+chunk. After review, the quote length is capped at 1000 characters (`MAX_QUOTE_CHARS`, quantifier
+`{1,1000}?`) to bound backtracking: the unbounded pattern was quadratic on a single line of
+unclosed `[id: "` openers (about 20 s at 100 KB, against about 0.6 s at 200 KB with the cap); a
+longer quote is not parsed. Practical exposure was already limited, because the model's output is
+capped by `max_tokens`.
 
 ### Analysis per round
 
