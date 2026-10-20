@@ -1,6 +1,8 @@
 """Acceptance tests: the CI eval gate and the Docker packaging are wired as designed."""
 from __future__ import annotations
 
+import copy
+import fnmatch
 import re
 import tomllib
 from pathlib import Path
@@ -142,7 +144,7 @@ def test_dockerignore_excludes_the_essentials():
         for ln in (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
         if ln.strip() and not ln.startswith("#")
     }
-    assert {".git", ".venv", "data/", ".env"} <= lines
+    assert {".git", ".venv", "data/", ".env", ".superpowers/", "evals/reports/"} <= lines
 
 
 def test_docker_readme_covers_the_caveats():
@@ -154,3 +156,106 @@ def test_docker_readme_covers_the_caveats():
 
 def test_deployer_owns_dockerignore():
     assert ".dockerignore" in POLICY["deployer"]
+
+
+# --- hardening: failures must fail the job, /data must be writable, build context must be intact ---
+
+FAIL_MASKS = ("|| true", "; true", "set +e")
+
+
+def _masking_problems(job: dict, step: dict) -> list[str]:
+    problems = []
+    if "continue-on-error" in job:
+        problems.append("job has continue-on-error")
+    if "continue-on-error" in step:
+        problems.append("step has continue-on-error")
+    problems += [f"run contains {m!r}" for m in FAIL_MASKS if m in step.get("run", "")]
+    return problems
+
+
+@pytest.mark.parametrize("sub", ["ingest", "eval", "gate"])
+def test_ci_eval_steps_cannot_mask_failure(sub):
+    job = CI["jobs"]["python"]
+    assert _masking_problems(job, STEPS[_step_index(f"evalrag {sub}")]) == []
+
+
+def test_failure_masking_detector_catches_mutations():
+    job = CI["jobs"]["python"]
+    step = STEPS[_step_index("evalrag gate")]
+    for key, value in (("continue-on-error", True),):
+        mutated = copy.deepcopy(step)
+        mutated[key] = value
+        assert _masking_problems(job, mutated)
+    for mask in FAIL_MASKS:
+        mutated = copy.deepcopy(step)
+        mutated["run"] += f" {mask}"
+        assert _masking_problems(job, mutated)
+    assert _masking_problems({**job, "continue-on-error": True}, step)
+
+
+def _data_dir_prepared_before_last_user(instructions: list[tuple[str, str]]) -> bool:
+    last_user = max(i for i, (ins, _) in enumerate(instructions) if ins == "USER")
+    return any(
+        ins == "RUN" and "mkdir" in args and "/data" in args and "chown" in args
+        for ins, args in instructions[:last_user]
+    )
+
+
+def test_dockerfile_prepares_data_dir_before_dropping_privileges():
+    instructions = _dockerfile()
+    assert _data_dir_prepared_before_last_user(instructions)
+    # mutation: moving the USER instruction ahead of the RUN must be detected
+    users = [x for x in instructions if x[0] == "USER"]
+    rest = [x for x in instructions if x[0] != "USER"]
+    assert not _data_dir_prepared_before_last_user(users + rest)
+
+
+def test_compose_init_does_not_restart_and_api_has_healthcheck():
+    services = _compose()["services"]
+    assert services["init"]["restart"] == "no"
+    assert services["api"]["healthcheck"]["test"]
+
+
+def _ignored(path: str, patterns: list[str]) -> bool:
+    for pat in patterns:
+        base = pat.rstrip("/")
+        if path == base or path.startswith(base + "/") or fnmatch.fnmatch(path, base):
+            return True
+    return False
+
+
+def _dockerignore_patterns() -> list[str]:
+    return [
+        ln.strip()
+        for ln in (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
+        if ln.strip() and not ln.startswith("#") and not ln.startswith("!")
+    ]
+
+
+def test_dockerfile_copy_sources_are_exact_and_not_ignored():
+    sources = set()
+    for ins, args in _dockerfile():
+        if ins == "COPY":
+            parts = [p for p in args.split() if not p.startswith("--")]
+            sources.update(p.rstrip("/") for p in parts[:-1])
+    assert sources == {"requirements.txt", "pyproject.toml", "src", "corpus", "evals/recordings"}
+    patterns = _dockerignore_patterns()
+    assert [s for s in sources if _ignored(s, patterns)] == []
+    assert _ignored("src", [*patterns, "src/"])  # matcher sanity: it can flag an exclusion
+
+
+def test_env_example_localhost_urls_are_flagged_for_docker():
+    lines = (ROOT / ".env.example").read_text(encoding="utf-8").splitlines()
+    for key in ("LLM_BASE_URL", "EMBED_BASE_URL"):
+        idx = next((i for i, ln in enumerate(lines) if ln.startswith(f"{key}=")), None)
+        assert idx is not None, f"{key} missing from .env.example"
+        value = lines[idx].split("=", 1)[1]
+        if "localhost" in value or "127.0.0.1" in value:
+            block = []
+            j = idx - 1
+            while j >= 0 and (lines[j].startswith("#") or lines[j].startswith("LLM_BASE_URL=")):
+                block.append(lines[j])
+                j -= 1
+            assert any("host.docker.internal" in ln for ln in block), (
+                f"{key} is a localhost URL without an adjacent host.docker.internal comment"
+            )
