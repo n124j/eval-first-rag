@@ -60,6 +60,7 @@ def test_ask_returns_answer_citations_and_shape():
         "refused": False,
         "citations_valid": True,
         "retrieved_ids": ["a#000", "b#001"],
+        "abstained": False,
     }
     assert pipeline.questions == ["What is a?"]
 
@@ -224,6 +225,20 @@ def test_openapi_lists_routes_and_schemas():
     assert set(schema["paths"]) == {"/health", "/ask"}
     assert "post" in schema["paths"]["/ask"] and "get" in schema["paths"]["/health"]
     assert {"AskRequest", "AskResponse"} <= set(schema["components"]["schemas"])
+    response = schema["components"]["schemas"]["AskResponse"]
+    assert (
+        set(response["properties"])
+        == set(response["required"])
+        == {
+            "answer",
+            "citations",
+            "refused",
+            "citations_valid",
+            "retrieved_ids",
+            "abstained",
+        }
+    )
+    assert response["properties"]["abstained"]["type"] == "boolean"
 
 
 def test_app_from_env_passes_min_dense_score_and_abstains_without_llm(tmp_path):
@@ -237,4 +252,28 @@ def test_app_from_env_passes_min_dense_score_and_abstains_without_llm(tmp_path):
     body = response.json()
     assert body["refused"] is True and body["answer"] == REFUSAL_TEXT
     assert body["citations"] == [] and body["retrieved_ids"]
+    assert body["abstained"] is True
     assert factory.llm_instance.questions == []
+
+
+def test_abstained_answer_response_is_exact():
+    abstained = Answer(
+        REFUSAL_TEXT, [], CitationReport(False, [], []), ["a#000"], True, None, abstained=True
+    )
+    body = TestClient(create_app(StubPipeline(abstained))).post("/ask", json={"question": "q"})
+    assert body.json() == {
+        "answer": REFUSAL_TEXT,
+        "citations": [],
+        "refused": True,
+        "citations_valid": False,
+        "retrieved_ids": ["a#000"],
+        "abstained": True,
+    }
+
+
+def test_answered_question_reports_not_abstained(tmp_path):
+    data = _tiny_index(tmp_path)
+    app = app_from_env(env={**ENV, "DATA_DIR": str(data)}, factory=FakeFactory())
+    with TestClient(app) as client:
+        body = client.post("/ask", json={"question": "How does the alpha module sort lists?"})
+    assert body.json()["abstained"] is False and body.json()["refused"] is False

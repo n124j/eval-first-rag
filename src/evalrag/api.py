@@ -44,6 +44,8 @@ class AskResponse(BaseModel):
     refused: bool
     citations_valid: bool
     retrieved_ids: list[str]
+    # True when the pipeline refused on low retrieval confidence without calling the LLM.
+    abstained: bool
 
 
 class HealthResponse(BaseModel):
@@ -88,6 +90,7 @@ def create_app(pipeline: RagPipeline, close: Callable[[], None] | None = None) -
             refused=answer.refused,
             citations_valid=answer.report.valid,
             retrieved_ids=list(answer.retrieved_ids),
+            abstained=answer.abstained,
         )
 
     return app

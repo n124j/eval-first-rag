@@ -270,6 +270,8 @@ def _eval_step(args, env, settings, embedder, llm) -> None:
         "model": args.model or str(llm.params.get("model", "")),
         "hardware": args.hardware or env.get("HARDWARE") or "unspecified",
         "date": args.date or datetime.now(UTC).date().isoformat(),
+        # The effective abstention threshold (flag or setting); 0 means disabled.
+        "min_dense_score": format(min_score, "g"),
     }
     metrics_out, report_out = Path(args.metrics_out), Path(args.report_out)
     metrics_out.parent.mkdir(parents=True, exist_ok=True)

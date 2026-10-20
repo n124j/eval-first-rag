@@ -123,3 +123,11 @@ def test_report_rejects_scores_for_unknown_items() -> None:
     meta = dict(META, judge_model="j")
     with pytest.raises(ValueError, match="zzz"):
         render_markdown(make_result(), meta, {"zzz": JudgeScore(1, 1, "x")})
+
+
+def test_report_meta_order_required_then_k_then_extras_alphabetically() -> None:
+    meta = dict(META, min_dense_score="0.67", alpha="x")
+    expected = EXPECTED_BASE.replace(
+        "| k | 5 |\n", "| k | 5 |\n| alpha | x |\n| min_dense_score | 0.67 |\n"
+    )
+    assert render_markdown(make_result(), meta) == expected

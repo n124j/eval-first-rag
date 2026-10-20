@@ -66,9 +66,10 @@ def render_markdown(
     if missing:
         raise ValueError(f"meta is missing required keys: {missing}")
 
+    # Required keys in order, then k, then any other keys alphabetically.
     meta_rows: list[tuple[object, ...]] = [(key, meta[key]) for key in REQUIRED_META]
-    meta_rows.extend((key, meta[key]) for key in sorted(set(meta) - set(REQUIRED_META)))
     meta_rows.append(("k", result.k))
+    meta_rows.extend((key, meta[key]) for key in sorted(set(meta) - set(REQUIRED_META)))
     meta_rows.append(("items", len(result.items)))
 
     metric_rows = [(name, _format_metric(name, result.metrics[name])) for name in METRIC_ORDER]

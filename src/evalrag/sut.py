@@ -5,6 +5,13 @@ from evalrag.pipeline import RagPipeline
 
 
 def make_sut(pipeline: RagPipeline) -> SystemUnderTest:
+    """Wrap `pipeline.ask` as the harness callable.
+
+    An answer without a completion (an abstention by the retrieval-confidence guard, or the
+    no-hit refusal) reports latency 0.0 and zero tokens. With the guard on, this pulls the
+    latency percentiles and token totals down compared with a guard-off run (ADR 0006).
+    """
+
     def sut(question: str) -> SutResult:
         answer = pipeline.ask(question)
         completion = answer.completion

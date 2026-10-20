@@ -739,3 +739,28 @@ def test_cli_eval_threshold_one_over_refuses_everything(tmp_path, corpus, golden
     assert metrics["correct_refusal_rate"] == 1.0
     assert metrics["over_refusal_rate"] == 1.0
     assert metrics["prompt_tokens_total"] == 0 and metrics["completion_tokens_total"] == 0
+
+
+@pytest.mark.parametrize(
+    ("env_extra", "argv_extra", "shown"),
+    [
+        ({}, [], "0"),  # ENV disables the guard: a disabled threshold shows 0
+        ({}, ["--min-dense-score", "0.45"], "0.45"),  # the flag is the effective value
+        ({"MIN_DENSE_SCORE": "0.67"}, [], "0.67"),  # the setting when no flag is given
+    ],
+)
+def test_cli_eval_report_records_effective_min_dense_score(
+    tmp_path, corpus, golden, env_extra, argv_extra, shown
+):
+    data = ingest_live(tmp_path, corpus)
+    args = eval_args(tmp_path, corpus, golden, data, *argv_extra)
+    assert run(args, env={**ENV, **env_extra}) == 0
+    report = (tmp_path / "out" / "report.md").read_text(encoding="utf-8")
+    assert f"| k | 3 |\n| min_dense_score | {shown} |\n| items | 3 |\n" in report
+
+
+def test_refresh_report_records_min_dense_score(tmp_path, corpus, golden):
+    args = refresh_args(tmp_path, corpus, golden, tmp_path / "data", "--min-dense-score", "0.45")
+    assert run(args) == 0
+    report = (tmp_path / "out" / "live.md").read_text(encoding="utf-8")
+    assert "| min_dense_score | 0.45 |" in report
