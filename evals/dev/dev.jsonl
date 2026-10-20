@@ -1,0 +1,20 @@
+{"id": "d001", "question": "What does the limit_denominator method of a Fraction return?", "expected_sources": ["fractions"], "answerable": true, "kind": "single"}
+{"id": "d002", "question": "Is the absolute number returned by time.perf_counter meaningful on its own?", "expected_sources": ["time"], "answerable": true, "kind": "single"}
+{"id": "d003", "question": "What does PurePath.with_suffix do when the original path has no suffix?", "expected_sources": ["pathlib"], "answerable": true, "kind": "single"}
+{"id": "d004", "question": "What happens when new items are appended to a bounded deque that is already at its maxlen?", "expected_sources": ["collections"], "answerable": true, "kind": "single"}
+{"id": "d005", "question": "How do I get the middle value of a list of numbers, taking the smaller of the two middle values when the list has an even length?", "expected_sources": ["statistics"], "answerable": true, "kind": "single"}
+{"id": "d006", "question": "How can I truncate a long sentence to fit a fixed width, with the dropped words replaced by a marker such as ' [...]'?", "expected_sources": ["textwrap"], "answerable": true, "kind": "single"}
+{"id": "d007", "question": "How can I tell whether a particular year contains 366 days?", "expected_sources": ["calendar"], "answerable": true, "kind": "single"}
+{"id": "d008", "question": "How can enum members get their values filled in automatically instead of me typing each number by hand?", "expected_sources": ["enum"], "answerable": true, "kind": "single"}
+{"id": "d009", "question": "My regular expression for an HTML tag matches from the first tag all the way to the end of the line instead of stopping at the first closing bracket; how do I fix that?", "expected_sources": ["re"], "answerable": true, "kind": "single"}
+{"id": "d010", "question": "Each warning my library emits shows up twice in the console after I added a handler to its own logger as well as to the top-level one; why?", "expected_sources": ["logging"], "answerable": true, "kind": "single"}
+{"id": "d011", "question": "How do I wrap a long paragraph so that its lines fit the current width of the terminal window?", "expected_sources": ["textwrap", "shutil"], "answerable": true, "kind": "multi"}
+{"id": "d012", "question": "How do I compute the median of the numbers in one column of a comma-separated file?", "expected_sources": ["csv", "statistics"], "answerable": true, "kind": "multi"}
+{"id": "d013", "question": "How do I pack two integers and a float into a fixed-size binary record with the struct module?", "expected_sources": [], "answerable": false, "kind": "unanswerable"}
+{"id": "d014", "question": "How do I safely turn a string holding a Python literal, such as a list of numbers, into the real object with the ast module?", "expected_sources": [], "answerable": false, "kind": "unanswerable"}
+{"id": "d015", "question": "With queue.Queue, how does a producer thread wait until consumer threads have processed every item it put in?", "expected_sources": [], "answerable": false, "kind": "unanswerable"}
+{"id": "d016", "question": "Can inspect.signature tell me which parameters a function accepts?", "expected_sources": [], "answerable": false, "kind": "unanswerable"}
+{"id": "d017", "question": "Which compression constant makes zipfile store members compressed with Zstandard?", "expected_sources": [], "answerable": false, "kind": "unanswerable"}
+{"id": "d018", "question": "Which calendar function lists the public holidays of a given country for a year?", "expected_sources": [], "answerable": false, "kind": "unanswerable"}
+{"id": "d019", "question": "What is the boiling point of water at the summit of Mount Everest?", "expected_sources": [], "answerable": false, "kind": "unanswerable"}
+{"id": "d020", "question": "Who painted the Mona Lisa?", "expected_sources": [], "answerable": false, "kind": "unanswerable"}

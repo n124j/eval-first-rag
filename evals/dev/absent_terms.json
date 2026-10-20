@@ -1,0 +1,43 @@
+{
+  "d013": [
+    "struct.pack",
+    "struct.unpack",
+    "calcsize",
+    "pack_into"
+  ],
+  "d014": [
+    "literal_eval",
+    "ast.parse",
+    "ast module"
+  ],
+  "d015": [
+    "queue.queue",
+    "task_done",
+    "queue.join"
+  ],
+  "d016": [
+    "inspect.signature",
+    "getfullargspec",
+    "inspect.parameter"
+  ],
+  "d017": [
+    "zstandard",
+    "zstd",
+    "zip_zstandard"
+  ],
+  "d018": [
+    "holiday",
+    "public holiday",
+    "bank holiday"
+  ],
+  "d019": [
+    "everest",
+    "boiling point",
+    "sea level"
+  ],
+  "d020": [
+    "mona lisa",
+    "da vinci",
+    "leonardo"
+  ]
+}
