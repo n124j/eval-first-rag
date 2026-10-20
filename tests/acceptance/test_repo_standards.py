@@ -9,6 +9,7 @@ import pytest
 import yaml
 
 from tools.hygiene import check_repo
+from tools.role_paths import violations
 
 ROOT = Path(__file__).resolve().parents[2]
 ROLES = ("manager", "developer", "tester", "deployer")
@@ -36,7 +37,7 @@ def test_no_site_globs_in_policy():
 
 def test_handoff_log_writable_by_all_roles():
     for role in ROLES:
-        assert "workforce/status/handoffs.jsonl" in POLICY[role]
+        assert not violations(role, ["workforce/status/handoffs.jsonl"], POLICY)
 
 
 @pytest.mark.parametrize("role", ROLES)
