@@ -44,7 +44,10 @@ FEW_SHOT = (
 # ("Fraction"). It runs to the first `"]` on the same line and never contains `"]`, so an
 # empty quote cannot swallow the next citation. verify_citations still requires the quote
 # (at least MIN_QUOTE_CHARS) to occur in the cited retrieved chunk. See ADR 0005, 12h.
-_CITATION_RE = re.compile(r'\[([\w.\-]+#\d{3}):\s*"((?:(?!"\]).)+?)"\]')
+# MAX_QUOTE_CHARS bounds the lazy scan, and with it the backtracking: unbounded, the pattern
+# is quadratic on a line of unclosed openers. Real quotes are far shorter than the cap.
+MAX_QUOTE_CHARS = 1000
+_CITATION_RE = re.compile(rf'\[([\w.\-]+#\d{{3}}):\s*"((?:(?!"\]).){{1,{MAX_QUOTE_CHARS}}}?)"\]')
 _WS_RE = re.compile(r"\s+")
 
 

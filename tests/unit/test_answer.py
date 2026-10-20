@@ -1,9 +1,11 @@
+import time
 from pathlib import Path
 
 import pytest
 
 from evalrag.generation.answer import (
     FEW_SHOT,
+    MAX_QUOTE_CHARS,
     MIN_QUOTE_CHARS,
     REFUSAL_TEXT,
     SYSTEM_PROMPT,
@@ -373,3 +375,32 @@ def test_inner_quote_citation_still_needs_exact_occurrence():
 
 def test_parse_citations_inside_code_span_is_found():
     assert parse_citations('`[a#001: "inside code span"]`') == [Citation("a#001", "inside code span")]
+
+
+def _repeat_to(unit: str, size: int) -> str:
+    return unit * (size // len(unit) + 1)
+
+
+@pytest.mark.parametrize(
+    ("unit", "expected"),
+    [
+        ('[a#001: "', 0),  # unclosed openers: the old unbounded pattern was quadratic here
+        ('[a#001: "abc"]', 1),  # many well-formed (deduplicated) citations
+    ],
+)
+def test_parse_citations_is_fast_on_200kb_single_line(unit, expected):
+    text = _repeat_to(unit, 200_000)
+    assert len(text) >= 200_000 and "\n" not in text
+    start = time.perf_counter()
+    found = parse_citations(text)
+    elapsed = time.perf_counter() - start
+    assert len(found) == expected
+    assert elapsed < 1.0, f"parse took {elapsed:.3f} s"
+
+
+def test_quote_length_is_capped_at_max_quote_chars():
+    # Documented limitation: a longer quote is not parsed at all.
+    assert MAX_QUOTE_CHARS == 1000
+    at_cap = "x" * MAX_QUOTE_CHARS
+    assert parse_citations(f'[a#001: "{at_cap}"]') == [Citation("a#001", at_cap)]
+    assert parse_citations(f'[a#001: "{at_cap}x"]') == []
