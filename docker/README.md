@@ -21,11 +21,14 @@ from an OpenAI-compatible server that you run yourself:
 
 - **LM Studio on the host (default).** Start its local server on port 1234. The containers reach it
   at `http://host.docker.internal:1234/v1` (`extra_hosts` maps that name on Linux too).
-- **Another server or an API key.** Copy `.env.example` to `.env` and set `LLM_BASE_URL`,
-  `EMBED_BASE_URL`, `LLM_MODEL` and `EMBED_MODEL`. Inside a container `localhost` is the container,
-  so use `host.docker.internal` (or a service name) rather than `localhost`. The `.env` file is
-  optional; without it the defaults are LM Studio on the host with `qwen2.5-7b-instruct-1m` and
-  `text-embedding-nomic-embed-text-v1.5`.
+- **Another server or an API key.** Create a `.env` file containing ONLY the variables you want to
+  override (`LLM_BASE_URL`, `EMBED_BASE_URL`, `LLM_MODEL`, `EMBED_MODEL`, ...). Do not copy
+  `.env.example` wholesale: its `localhost` URLs are for running evalrag directly on your machine,
+  and inside a container `localhost` is the container itself. Use `host.docker.internal` (or a
+  service name) in Docker.
+- **Precedence.** A value in `.env` overrides the compose defaults. The defaults, used when a
+  variable is unset, are `http://host.docker.internal:1234/v1` for both URLs, `qwen2.5-7b-instruct-1m`
+  and `text-embedding-nomic-embed-text-v1.5`. The `.env` file is optional.
 
 ## CPU only
 
