@@ -1,7 +1,10 @@
 # ADR 0006: Retrieval-confidence abstention
 
 Status: accepted (default `MIN_DENSE_SCORE` 0.67, calibrated on the dev set only; the
-golden-set effect is UNMEASURED)
+golden-set effect is UNMEASURED). The golden set has NOT been used for tuning. The default is
+subject to the pre-registered rule in "Decision": both guard-on and guard-off golden results
+will be reported, and the default reverts to 0.0 if the guard raises golden
+`over_refusal_rate` by more than 0.05.
 
 ## Context
 
@@ -41,10 +44,41 @@ with `over_refusal_rate` (refused answerable items / all answerable items).
   `Settings` dataclass default and `from_env`) reaches `ask`, `eval`, `refresh-recordings` and
   the API. The three commands also take `--min-dense-score FLOAT` for experiments. Invalid values
   are a `ConfigError` naming the key, or an argparse error (exit 2) for the flag.
-- **Replay determinism.** In replay mode the query vector comes from the recorded embeddings
-  cache, and the dense index was built from recorded document vectors, so `top_dense_score`, and
-  with it every abstention decision, is reproduced exactly on replay. Recorded vectors are stored
-  as float16 and differ slightly from live ones; that is why the calibration below keeps a margin.
+- **No dense candidate.** If the dense candidate list is empty, `retrieve_detailed` reports
+  `top_dense_score` 0.0. With a positive threshold that is below it, so the guard refuses with
+  `abstained=True` (the retrieved ids are whatever keyword-only hits remain). This differs from
+  the pipeline's older no-hit path: when retrieval returns no hits at all and the guard did not
+  fire (threshold 0.0, or a retriever that reports a score at or above the threshold with no
+  hits), `ask` refuses without an LLM call but with `abstained=False` and empty
+  `retrieved_ids`. So `abstained` means "refused by the confidence guard", not "refused without
+  calling the LLM". With the real indexes neither case occurs in practice: `DenseIndex.search`
+  raises `EmptyIndex` on an empty index instead of returning nothing, and a non-empty index
+  always returns at least one candidate. The two paths are therefore left as they are.
+- **Replay and the final recording.** The guard decides from dense scores computed from
+  whatever vectors the embedder returns. On replay those are the recorded vectors, stored as
+  float16, so replay against the same recordings is deterministic. A plain live run uses
+  float32 vectors (`RecordingEmbedder` already returns the float16-rounded vectors while
+  recording, so a recording run sees the same values as its replay, but an unrecorded live run
+  does not). A live float32 score within about 1e-5 of the threshold could therefore decide
+  differently live than on replay. If such a question was recorded with the guard on and
+  abstained, it would have no recorded completion, and a replay that does not abstain would
+  fail with a replay miss. **Design for the final recording:** the final golden recordings are
+  made with the guard DISABLED (`refresh-recordings --min-dense-score 0`), so that a completion
+  is recorded for every question. The guard is then applied at replay time (`eval` with the
+  default or an explicit `--min-dense-score`). An abstained question simply does not use its
+  recorded completion. This removes the replay-miss risk and lets the same recordings be
+  replayed with the guard on and off. The dev calibration below keeps a margin for the same
+  float16 reason.
+- **Metrics side effects.** `make_sut` reports an abstained item, which has no completion, with
+  `latency_s` 0.0 and zero prompt and completion tokens. With the guard on, abstentions therefore
+  pull `latency_p50_s`, `latency_p95_s`, `prompt_tokens_total` and `completion_tokens_total`
+  down compared with a guard-off run of the same items. Latency and token figures from guard-on
+  and guard-off runs are not comparable as measures of model speed or cost per answered
+  question. The behaviour is intentional (an abstention really costs no generation) and is
+  documented in `src/evalrag/sut.py`.
+- **Reports.** `eval` and `refresh-recordings` write the effective threshold (flag or setting,
+  `0` when disabled) as `min_dense_score` in the report metadata table, and the `/ask` response
+  carries `abstained`.
 
 ## Calibration (dev set only)
 
@@ -84,8 +118,10 @@ domain):
 | d020 | unanswerable (out of domain) | 0.558583 | none | datetime |
 
 Answerable range 0.691150 to 0.839119. Unanswerable range 0.558583 to 0.797336. The ranges
-overlap heavily: 6 of the 8 unanswerable items score above the lowest answerable item, and d015
-scores above 11 of the 12 answerable items.
+overlap heavily: 5 of the 8 unanswerable items (d014, d015, d016, d017, d018) score above the
+lowest answerable item (0.691150, d012), and d015 scores above 11 of the 12 answerable items.
+d013 (0.687502) is just below the lowest answerable score, by 0.0036, which is inside the 0.02
+margin required below.
 
 Threshold grid (abstain when the score is strictly below the threshold). Thresholds 0.30 to
 0.85 in steps of 0.05, plus values in the observed gaps (0.56, 0.62, 0.67, 0.68, 0.69):
@@ -132,12 +168,22 @@ module looks like a page that is included: queue resembles threading, ast resemb
 resembles typing, struct resembles random. A question about a missing feature of an included
 module matches that module's own page well (zipfile, calendar). These questions are on topic for
 the corpus, so their best chunk is close in embedding space even though it does not contain the
-answer. Only out-of-domain questions fall clearly below the answerable range.
+answer. Five of the six missed items score above the lowest answerable item. The sixth, d013,
+scores just below it (0.687502 against 0.691150) but above the threshold. Only the
+out-of-domain questions fall clearly below the answerable range.
 
 Judgement: the guard is narrow but useful. It costs no over-refusal on the dev set, removes the
 LLM call for clearly off-topic questions, and the code is opt-out (`MIN_DENSE_SCORE=0`). It does
 not solve abstention: 6 of 8 dev unanswerable items still reach the LLM, and refusing those is
 left to the model or to a later mechanism.
+
+**Pre-registered rule for the golden set.** The golden set has NOT been used for tuning, and the
+threshold above was fixed on the dev set before any golden measurement. At the final recording
+(made with the guard disabled, see "Replay and the final recording"), the same recordings will
+be replayed twice: with the guard on (default 0.67) and with it off (0.0). BOTH results are
+reported. The shipped default stays 0.67 unless the guard raises golden `over_refusal_rate` by
+more than 0.05 compared with guard-off. In that case the default reverts to 0.0 and this ADR is
+amended with the measured result.
 
 ## Limitations
 
