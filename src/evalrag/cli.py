@@ -181,9 +181,8 @@ def _data_dir(args: argparse.Namespace, settings: Settings) -> Path:
 
 
 def _ingest_step(args, settings, embedder) -> None:
-    """Build the index and flush the embedder; shared by `ingest` and `refresh-recordings`."""
+    """Build the index; shared by `ingest` and `refresh-recordings`. Callers flush."""
     summary = ingest(settings, Path(args.corpus), _data_dir(args, settings), embedder)
-    _flush(embedder)
     print(f"ingested {summary.documents} documents, {summary.chunks} chunks, dim {summary.dim}")
 
 
@@ -193,6 +192,7 @@ def _cmd_ingest(args, env, factory) -> int:
         settings, _path(args.record_embeddings), _path(args.replay_embeddings)
     )
     _ingest_step(args, settings, embedder)
+    _flush(embedder)
     return 0
 
 
@@ -263,16 +263,26 @@ def _cmd_refresh(args, env, factory) -> int:
             )
             return 1
     settings = Settings.from_env(env, require_endpoints=True)
-    if args.overwrite:
-        emb_out.unlink(missing_ok=True)
-        llm_out.unlink(missing_ok=True)
-    embedder = factory.embedder(settings, emb_out, None)
-    llm = factory.llm(settings, llm_out, None)
-    _ingest_step(args, settings, embedder)
-    _eval_step(args, env, settings, embedder, llm)
-    print(
-        f"recorded {_entry_count(embedder)} embeddings and {_entry_count(llm)} completions"
-    )
+    known = {doc.doc_id for doc in load_corpus(Path(args.corpus))}
+    load_golden(Path(args.golden), known_sources=known)
+    # Record into temporary files; the finals are replaced only after everything succeeded.
+    emb_tmp = emb_out.with_name(emb_out.name + ".refresh-tmp")
+    llm_tmp = llm_out.with_name(llm_out.name + ".refresh-tmp")
+    for tmp in (emb_tmp, llm_tmp):
+        tmp.unlink(missing_ok=True)
+    try:
+        embedder = factory.embedder(settings, emb_tmp, None)
+        llm = factory.llm(settings, llm_tmp, None)
+        _ingest_step(args, settings, embedder)
+        _eval_step(args, env, settings, embedder, llm)  # flushes both recorders once
+        os.replace(emb_tmp, emb_out)
+        os.replace(llm_tmp, llm_out)
+    except BaseException:
+        for tmp in (emb_tmp, llm_tmp):
+            with contextlib.suppress(OSError):
+                tmp.unlink(missing_ok=True)
+        raise
+    print(f"recorded {_entry_count(embedder)} embeddings and {_entry_count(llm)} completions")
     return 0
 
 

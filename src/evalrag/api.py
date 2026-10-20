@@ -1,6 +1,7 @@
 """HTTP API: `GET /health` and `POST /ask` over a `RagPipeline`.
 
-Run with `uvicorn --factory evalrag.api:app_from_env`.
+Run with `uvicorn --factory evalrag.api:app_from_env`. The API is unauthenticated, has no
+CORS, and is for local use only.
 """
 
 import contextlib
@@ -23,7 +24,7 @@ from evalrag.retrieval.dense import EmptyIndex
 from evalrag.retrieval.embedder import EmbeddingError
 
 MAX_QUESTION_CHARS = 2000
-log = logging.getLogger(__name__)
+log = logging.getLogger("evalrag.api")
 
 
 class AskRequest(BaseModel):
@@ -73,8 +74,12 @@ def create_app(pipeline: RagPipeline, close: Callable[[], None] | None = None) -
         try:
             with lock:
                 answer = pipeline.ask(request.question)
-        except (LLMError, EmbeddingError) as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        except LLMError as exc:
+            log.warning("language model service error: %s", exc)
+            raise HTTPException(status_code=502, detail="language model service error") from exc
+        except EmbeddingError as exc:
+            log.warning("embedding service error: %s", exc)
+            raise HTTPException(status_code=502, detail="embedding service error") from exc
         except EmptyIndex as exc:
             raise HTTPException(status_code=503, detail="index is empty") from exc
         return AskResponse(

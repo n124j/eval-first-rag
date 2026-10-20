@@ -7,6 +7,7 @@ import pytest
 
 from evalrag.cli import ComponentFactory, _build_parser, main
 from evalrag.generation.answer import REFUSAL_TEXT
+from evalrag.generation.llm import LLMError
 from evalrag.ingest import load_chunks
 from evalrag.retrieval.dense import DenseIndex
 from evalrag.retrieval.embedder import cache_key
@@ -460,3 +461,75 @@ def test_refresh_defaults_for_report_and_metrics_paths():
     assert args.report_out == "evals/reports/live.md"
     assert args.metrics_out == "evals/reports/live-metrics.json"
     assert args.overwrite is False
+
+
+class CountingFactory(FakeFactory):
+    def __init__(self):
+        self.embedder_calls = 0
+        self.llm_calls = 0
+
+    def embedder(self, settings, record, replay):
+        self.embedder_calls += 1
+        return super().embedder(settings, record, replay)
+
+    def llm(self, settings, record, replay):
+        self.llm_calls += 1
+        return super().llm(settings, record, replay)
+
+
+def _old_caches(tmp_path):
+    (tmp_path / "rec").mkdir(exist_ok=True)
+    emb, llm = tmp_path / "rec" / "emb.npz", tmp_path / "rec" / "llm.jsonl"
+    emb.write_bytes(b"old-emb")
+    llm.write_text("old-llm", encoding="utf-8")
+    return emb, llm
+
+
+def _assert_untouched(tmp_path, emb, llm):
+    assert emb.read_bytes() == b"old-emb" and llm.read_text(encoding="utf-8") == "old-llm"
+    assert list(tmp_path.rglob("*.refresh-tmp")) == []
+
+
+def test_refresh_overwrite_with_missing_golden_keeps_old_recordings(
+    tmp_path, corpus, capsys
+):
+    emb, llm = _old_caches(tmp_path)
+    args = refresh_args(tmp_path, corpus, tmp_path / "nope.jsonl", tmp_path / "d", "--overwrite")
+    assert run(args) == 1
+    assert capsys.readouterr().err.startswith("error: ")
+    _assert_untouched(tmp_path, emb, llm)
+
+
+def test_refresh_overwrite_with_failing_llm_keeps_old_recordings(tmp_path, corpus, golden):
+    emb, llm = _old_caches(tmp_path)
+
+    class Failing(ScriptedLLM):
+        def complete(self, messages):
+            raise LLMError("server stopped")
+
+    class FailingFactory(FakeFactory):
+        def live_llm(self, settings):
+            return Failing()
+
+    args = refresh_args(tmp_path, corpus, golden, tmp_path / "d", "--overwrite")
+    assert run(args, factory=FailingFactory()) == 1
+    _assert_untouched(tmp_path, emb, llm)
+
+
+def test_refresh_overwrite_success_replaces_finals_and_leaves_no_temp_files(
+    tmp_path, corpus, golden
+):
+    emb, llm = _old_caches(tmp_path)
+    factory = CountingFactory()
+    assert run(refresh_args(tmp_path, corpus, golden, tmp_path / "d", "--overwrite"), factory=factory) == 0
+    assert factory.embedder_calls == 1 and factory.llm_calls == 1
+    assert b"old-emb" != emb.read_bytes() and "old-llm" not in llm.read_text(encoding="utf-8")
+    assert len(llm.read_text(encoding="utf-8").splitlines()) - 1 == 3
+    assert list(tmp_path.rglob("*.refresh-tmp")) == []
+
+
+def test_refresh_refusal_leaves_everything_untouched(tmp_path, corpus, golden):
+    emb, llm = _old_caches(tmp_path)
+    assert run(refresh_args(tmp_path, corpus, golden, tmp_path / "d")) == 1
+    _assert_untouched(tmp_path, emb, llm)
+    assert not (tmp_path / "d").exists()

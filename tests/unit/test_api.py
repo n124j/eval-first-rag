@@ -1,3 +1,4 @@
+import logging
 import threading
 import time
 
@@ -97,18 +98,24 @@ def test_refusal_response_shape():
     assert body["citations_valid"] is False
 
 
-def test_llm_error_maps_to_502_with_message():
-    client = TestClient(create_app(StubPipeline(error=LLMError("llm down"))))
-    response = client.post("/ask", json={"question": "q"})
+def test_llm_error_maps_to_502_with_message(caplog):
+    client = TestClient(create_app(StubPipeline(error=LLMError("llm down at secret-host"))))
+    with caplog.at_level(logging.WARNING, logger="evalrag.api"):
+        response = client.post("/ask", json={"question": "q"})
     assert response.status_code == 502
-    assert response.json() == {"detail": "llm down"}
+    assert response.json() == {"detail": "language model service error"}
+    assert "secret-host" not in response.text
+    assert "llm down at secret-host" in caplog.text
 
 
-def test_embedding_error_maps_to_502():
-    client = TestClient(create_app(StubPipeline(error=EmbeddingError("embed down"))))
-    response = client.post("/ask", json={"question": "q"})
+def test_embedding_error_maps_to_502(caplog):
+    client = TestClient(create_app(StubPipeline(error=EmbeddingError("embed down at secret-host"))))
+    with caplog.at_level(logging.WARNING, logger="evalrag.api"):
+        response = client.post("/ask", json={"question": "q"})
     assert response.status_code == 502
-    assert response.json() == {"detail": "embed down"}
+    assert response.json() == {"detail": "embedding service error"}
+    assert "secret-host" not in response.text
+    assert "embed down at secret-host" in caplog.text
 
 
 def test_empty_index_maps_to_503():
