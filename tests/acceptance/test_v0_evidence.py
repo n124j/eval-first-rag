@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 
 from evalrag.evals.gate import load_metrics
+from evalrag.generation.llm import ReplayClient
 
 ROOT = Path(__file__).resolve().parents[2]
 REPORTS = ROOT / "evals" / "reports"
@@ -16,7 +17,7 @@ REPORT = REPORTS / "v0-prompt-1b-report.md"
 METRICS = REPORTS / "v0-prompt-1b-metrics.json"
 COMPLETIONS = REPORTS / "v0-prompt-1b-completions.jsonl"
 README = REPORTS / "README.md"
-MASQUERADE = ROOT / "evals" / "recordings" / "llm.jsonl"
+FINAL_RECORDING = ROOT / "evals" / "recordings" / "llm.jsonl"
 
 METRIC_KEYS = {
     "recall_at_k",
@@ -59,5 +60,9 @@ def test_readme_states_the_finding_and_the_refusal_text():
     assert V0_REFUSAL in text
 
 
-def test_v0_evidence_is_not_masquerading_as_a_fixture():
-    assert not MASQUERADE.exists()
+def test_final_recording_is_not_the_v0_run():
+    # The final recording lives under evals/recordings/ and is the 7B run; the v0 evidence
+    # stays the 1B run under evals/reports/.
+    assert ReplayClient(FINAL_RECORDING).params["model"] == "qwen2.5-7b-instruct-1m"
+    header = json.loads(COMPLETIONS.read_text(encoding="utf-8").splitlines()[0])
+    assert header["meta"]["model"] == "llama-3.2-1b-instruct"

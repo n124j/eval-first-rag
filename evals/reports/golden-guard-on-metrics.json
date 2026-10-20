@@ -1,0 +1,11 @@
+{
+  "citation_validity_rate": 0.3,
+  "completion_tokens_total": 2970.0,
+  "correct_refusal_rate": 0.8,
+  "latency_p50_s": 4.372693000012077,
+  "latency_p95_s": 7.113407299970277,
+  "mrr": 0.8966666666666667,
+  "over_refusal_rate": 0.18,
+  "prompt_tokens_total": 76449.0,
+  "recall_at_k": 0.88
+}

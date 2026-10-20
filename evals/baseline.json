@@ -1,0 +1,52 @@
+{
+  "model": "qwen2.5-7b-instruct-1m (Qwen2.5-7B-Instruct-1M Q4_K_M) + text-embedding-nomic-embed-text-v1.5 (Q4_K_M); min_dense_score=0.67; k=3",
+  "date": "2026-10-20",
+  "reason": "Baseline from the first golden-set recording (60 items, k=3, qwen2.5-7b-instruct-1m). The regression gate runs on recorded responses and recorded embeddings, so it is deterministic and offline. The recording was made with the confidence guard disabled and replayed with the guard on (the shipped default 0.67) to produce these values; BOTH rows (guard off and guard on) are published in evals/reports/README.md. Tolerances: recall_at_k, mrr and citation_validity_rate use max(0.02, 2 x observed live spread); the spread over the recording and 3 live re-runs was 0 for all of them, so the floor 0.02 applies (one answerable item of about 50 flipping). correct_refusal_rate and over_refusal_rate use max(0.10, 2 x spread); the observed spread was 0, so the floor 0.10 applies (one of 10 unanswerable items, or about 5 of 50 answerable ones). Latencies get 25% of the value and token totals 5% of the value (replayed latencies are the recorded ones, so these only absorb deliberate small changes). The v0 1B evidence is under evals/reports/v0-*. Any change to the prompt, parser, chunking, retrieval, model or threshold requires re-recording and a new baseline with a recorded reason.",
+  "metrics": {
+    "recall_at_k": {
+      "value": 0.88,
+      "tolerance": 0.02,
+      "direction": "higher"
+    },
+    "mrr": {
+      "value": 0.8966666666666667,
+      "tolerance": 0.02,
+      "direction": "higher"
+    },
+    "citation_validity_rate": {
+      "value": 0.3,
+      "tolerance": 0.02,
+      "direction": "higher"
+    },
+    "correct_refusal_rate": {
+      "value": 0.8,
+      "tolerance": 0.1,
+      "direction": "higher"
+    },
+    "over_refusal_rate": {
+      "value": 0.18,
+      "tolerance": 0.1,
+      "direction": "lower"
+    },
+    "latency_p50_s": {
+      "value": 4.372693000012077,
+      "tolerance": 1.093,
+      "direction": "lower"
+    },
+    "latency_p95_s": {
+      "value": 7.113407299970277,
+      "tolerance": 1.778,
+      "direction": "lower"
+    },
+    "prompt_tokens_total": {
+      "value": 76449.0,
+      "tolerance": 3822.45,
+      "direction": "lower"
+    },
+    "completion_tokens_total": {
+      "value": 2970.0,
+      "tolerance": 148.5,
+      "direction": "lower"
+    }
+  }
+}

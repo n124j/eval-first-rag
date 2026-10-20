@@ -2,6 +2,8 @@
 
 ## The v0 evidence (first live measurement)
 
+Note: the v0 description below (k=5, bare `[chunk_id]` context header, 1B model) is the historical v0 configuration; see `docs/adr/0005-prompt-iteration.md` for what replaced it.
+
 The three `v0-prompt-1b-*` files are the first live evaluation of this system. They are
 kept on purpose: this project is "eval-first", so a measured failure and the fix that
 follows are part of the story.
@@ -126,7 +128,7 @@ These files are **not** CI fixtures. The completions are cached against the exac
 prompt. A different prompt produces different request keys and finds nothing in this cache.
 For that reason `v0-prompt-1b-completions.jsonl` lives here and not under
 `evals/recordings/`, which is reserved for the final recordings that CI replays.
-`evals/baseline.json` does not exist yet and is not derived from v0.
+`evals/baseline.json` is not derived from v0; it comes from the final golden recording (next section).
 
 ## What comes next
 
@@ -135,4 +137,57 @@ For that reason `v0-prompt-1b-completions.jsonl` lives here and not under
 2. Add retrieval-confidence abstention: when retrieval scores are weak, refuse without
    asking the model, which addresses the unanswerable questions directly.
 3. Record the final run on the frozen golden set, commit it under `evals/recordings/`
-   together with the baseline, and let CI replay it offline through the regression gate.
+   together with the baseline, and let CI replay it offline through the regression gate
+   (done, see the next section; items 1 and 2 are also done).
+
+## Final golden-set results (qwen2.5-7b-instruct-1m)
+
+- Date: 2026-10-20.
+- Generation model: `qwen2.5-7b-instruct-1m` (Qwen2.5-7B-Instruct-1M, Q4_K_M, 4.68 GB), temperature 0, served by LM Studio.
+- Embedding model: `text-embedding-nomic-embed-text-v1.5` (Q4_K_M), served by LM Studio.
+- Hardware: AMD Ryzen 9 3900X, 128 GB RAM, Radeon RX 6600 XT 8 GB; served by LM Studio (GPU offload setting not recorded).
+- Setup: frozen golden set, 60 items (50 answerable, 10 unanswerable), `k=3`, committed prompt and parser (ADR 0005).
+- Recording: ONE live run with the retrieval-confidence guard disabled (`--min-dense-score 0`), so a completion exists for every question. It recorded 1349 embeddings and 60 completions in about 6 minutes (363 s wall clock, including embedding the 1289 chunks). These are the CI fixtures: `evals/recordings/embeddings.npz` and `evals/recordings/llm.jsonl`.
+- The same recordings were then replayed with the guard on (default 0.67). Both result sets are published: `golden-guard-off{.md,-metrics.json}` and `golden-guard-on{.md,-metrics.json}`.
+
+| Metric | Guard off (0) | Guard on (0.67, default) |
+| --- | --- | --- |
+| recall_at_k | 0.8800 | 0.8800 |
+| mrr | 0.8967 | 0.8967 |
+| citation_validity_rate | 0.3000 | 0.3000 |
+| correct_refusal_rate | 0.7000 | 0.8000 |
+| over_refusal_rate | 0.1800 | 0.1800 |
+| latency_p50_s | 4.373 | 4.373 |
+| latency_p95_s | 7.113 | 7.113 |
+| prompt_tokens_total | 81651 | 76449 |
+| completion_tokens_total | 3037 | 2970 |
+
+Latency and token rows are not comparable between the columns as measures of model speed: with the guard on, an abstained question makes no LLM call and counts as zero latency and zero tokens (ADR 0006).
+
+### Pre-registered rule (ADR 0006)
+
+The guard may stay the default unless it raises golden `over_refusal_rate` by more than 0.05. Guard off: 0.1800. Guard on: 0.1800. Difference: 0.0000. Verdict: the rule does not fire, so the shipped default stays 0.67. The guard changed one outcome: `correct_refusal_rate` rose from 0.7 to 0.8 (g051, an asyncio question that the model had answered, is now refused by the guard). Nothing else changed.
+
+### Variance
+
+The LLM side was re-run live 3 more times with the guard disabled (scratch runs, not committed; embeddings replayed). Quality metrics were identical in all four runs (recorded run plus 3 re-runs): recall_at_k 0.88, mrr 0.8967, citation_validity_rate 0.30, correct_refusal_rate 0.70, over_refusal_rate 0.18, prompt tokens 81651, completion tokens 3037. The spread (max minus min) is 0 for all of them, as expected at temperature 0 on one server. Only timing varies:
+
+| Metric | Recorded | Re-run 1 | Re-run 2 | Re-run 3 | Spread |
+| --- | --- | --- | --- | --- | --- |
+| latency_p50_s | 4.373 | 4.361 | 4.380 | 4.378 | 0.019 |
+| latency_p95_s | 7.113 | 7.056 | 7.034 | 7.055 | 0.079 |
+
+Zero spread means "no sampling noise on this machine and server build", not "robust to a different GPU offload, server version or quantisation". The baseline tolerances therefore use their floors (see `evals/baseline.json`).
+
+### Replay determinism
+
+Replaying the guard-off recording offline with `--min-dense-score 0` reproduces `golden-guard-off-metrics.json` (and the guard-off report) byte for byte. Replaying with the default guard reproduces `golden-guard-on-metrics.json`. Both checks run in CI as acceptance tests with the network disabled. `evals/baseline.json` is built from the guard-on row.
+
+### What these numbers do and do not show
+
+- The golden set is 60 items written by one author. One answerable item moves a rate by 0.02, one unanswerable item by 0.10. Differences of a few items are not evidence of anything.
+- Retrieval is scored per document (is the right document among the top 3), not per passage, so recall_at_k overstates how precisely the right passage is found.
+- `citation_validity_rate` only checks that each quoted string occurs in a retrieved chunk. A valid citation is not a supported answer: a model can quote a real sentence that does not back its claim. Only 0.30 of answerable questions got a fully valid citation, so most answers are not verifiably grounded by this metric.
+- On the dev set the same model and committed code scored citation_validity_rate 0.6667, over_refusal_rate 0.1667 and correct_refusal_rate 0.6250 (ADR 0005). On the golden set validity is much lower (0.30), over-refusal is similar (0.18) and correct refusal is higher (0.70 without the guard). Dev prompt iteration therefore did not transfer fully to held-out questions, which is what a held-out set is for; with 20 and 60 items the gap is measured but its causes are not.
+- The guard's effect is narrow: it only helps on questions whose best dense similarity is below 0.67. It refused one more unanswerable item (g051) and no answerable item on the golden set. It does not address near-miss questions on topics the corpus covers.
+- Results depend on this recording. Re-recording after any change to the prompt, parser, chunking, retrieval, model or threshold can move every number, and requires a new baseline.
