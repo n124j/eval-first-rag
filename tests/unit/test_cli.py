@@ -27,6 +27,7 @@ METRICS = {
     "mrr",
     "citation_validity_rate",
     "correct_refusal_rate",
+    "over_refusal_rate",
     "latency_p50_s",
     "latency_p95_s",
     "prompt_tokens_total",
@@ -413,7 +414,7 @@ def test_refresh_records_documents_and_queries_in_one_embedding_cache(
     # identical chunk texts share one cache entry (the key is kind + text)
     assert len(keys) == len({c.text for c in chunks}) + len(set(questions))
     assert out[0].startswith("ingested 3 documents")
-    assert {line.split(":")[0] for line in out[1:9]} == METRICS
+    assert {line.split(":")[0] for line in out[1:10]} == METRICS
     assert out[-1] == f"recorded {len(keys)} embeddings and 3 completions"
 
 

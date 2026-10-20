@@ -8,7 +8,13 @@ from evalrag.evals.judge import JudgeScore
 from evalrag.evals.runner import EvalResult, ItemResult
 
 REQUIRED_META = ("model", "hardware", "date")
-_RATIO = ("recall_at_k", "mrr", "citation_validity_rate", "correct_refusal_rate")
+_RATIO = (
+    "recall_at_k",
+    "mrr",
+    "citation_validity_rate",
+    "correct_refusal_rate",
+    "over_refusal_rate",
+)
 _LATENCY = ("latency_p50_s", "latency_p95_s")
 _TOKENS = ("prompt_tokens_total", "completion_tokens_total")
 METRIC_ORDER = _RATIO + _LATENCY + _TOKENS

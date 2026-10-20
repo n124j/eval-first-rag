@@ -69,6 +69,8 @@ def test_run_eval_aggregates_match_hand_computed_values() -> None:
     assert m["citation_validity_rate"] == 0.5
     # item 5 refused, item 6 answered
     assert m["correct_refusal_rate"] == 0.5
+    # item 3 is the only refused answerable item out of 4
+    assert m["over_refusal_rate"] == 0.25
     # latencies 1..6: nearest rank p50 -> 3rd, p95 -> ceil(5.7) = 6th
     assert m["latency_p50_s"] == 3.0
     assert m["latency_p95_s"] == 6.0
@@ -84,6 +86,7 @@ def test_metrics_keys_are_exact() -> None:
         "mrr",
         "citation_validity_rate",
         "correct_refusal_rate",
+        "over_refusal_rate",
         "latency_p50_s",
         "latency_p95_s",
         "prompt_tokens_total",
@@ -161,3 +164,54 @@ def test_invalid_arguments() -> None:
         run_eval(scripted(), [], k=2)
     with pytest.raises(ValueError):
         run_eval(scripted(), ITEMS, k=0)
+
+
+def test_over_refusal_rate_counts_refused_answerable_only() -> None:
+    items = [
+        gi("1", "single", ("a",)),
+        gi("2", "single", ("a",)),
+        gi("3", "multi", ("a", "b")),
+        gi("4", "unanswerable", ()),
+        gi("5", "unanswerable", ()),
+    ]
+    sut = Scripted(
+        {
+            "question 1?": res(["a#001"], refused=True),
+            "question 2?": res(["a#001"]),
+            "question 3?": res(["a#001", "b#001"]),
+            # refusing unanswerable items is correct and must not count as over-refusal
+            "question 4?": res([], refused=True),
+            "question 5?": res([], refused=True),
+        }
+    )
+    m = run_eval(sut, items).metrics
+    assert m["over_refusal_rate"] == pytest.approx(1 / 3)
+    assert m["correct_refusal_rate"] == 1.0
+
+
+def test_over_refusal_rate_nan_without_answerable_items() -> None:
+    items = [gi("1", "unanswerable", ())]
+    m = run_eval(Scripted({"question 1?": res([], refused=True)}), items).metrics
+    assert math.isnan(m["over_refusal_rate"])
+
+
+def test_over_refusal_independent_of_citation_validity() -> None:
+    items = [gi("1", "single", ("a",)), gi("2", "single", ("a",))]
+    # answered with invalid citations: not valid, but not an over-refusal either
+    answered_invalid = Scripted(
+        {
+            "question 1?": res(["a#001"], ok=False),
+            "question 2?": res(["a#001"], ok=False),
+        }
+    )
+    m = run_eval(answered_invalid, items).metrics
+    assert (m["citation_validity_rate"], m["over_refusal_rate"]) == (0.0, 0.0)
+    # refused but flagged citation_ok: refusal counts, and validity stays 0
+    refused_flagged_ok = Scripted(
+        {
+            "question 1?": res(["a#001"], refused=True, ok=True),
+            "question 2?": res(["a#001"], refused=True, ok=True),
+        }
+    )
+    m = run_eval(refused_flagged_ok, items).metrics
+    assert (m["citation_validity_rate"], m["over_refusal_rate"]) == (0.0, 1.0)

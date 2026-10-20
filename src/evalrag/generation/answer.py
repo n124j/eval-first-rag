@@ -64,8 +64,17 @@ def _user_content(question: str, sources: list[tuple[str, str]]) -> str:
     return "\n\n".join(parts)
 
 
+def _one_line(text: str) -> str:
+    return " ".join(text.split())
+
+
 def build_messages(question: str, chunks: list[Chunk]) -> list[dict[str, str]]:
-    if not question.strip():
+    # The question and chunk texts are collapsed to one line each, so neither can start a
+    # line with "Source id:", "Text:", "Question:" or "Answer:" and forge a block. Marker
+    # text inside a single line is still possible; see ADR 0005, "Prompt-format injection".
+    # chunk_document already emits single-spaced text, so real prompts are unchanged.
+    question = _one_line(question)
+    if not question:
         raise ValueError("question must not be empty")
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     for example_question, example_sources, example_answer in FEW_SHOT:
@@ -73,7 +82,7 @@ def build_messages(question: str, chunks: list[Chunk]) -> list[dict[str, str]]:
             {"role": "user", "content": _user_content(example_question, list(example_sources))}
         )
         messages.append({"role": "assistant", "content": example_answer})
-    sources = [(c.chunk_id, c.text) for c in chunks]
+    sources = [(c.chunk_id, _one_line(c.text)) for c in chunks]
     messages.append({"role": "user", "content": _user_content(question, sources)})
     return messages
 

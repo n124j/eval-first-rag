@@ -42,6 +42,7 @@ EXPECTED_BASE = """\
 | mrr | 1.0000 |
 | citation_validity_rate | 0.5000 |
 | correct_refusal_rate | n/a |
+| over_refusal_rate | 0.0000 |
 | latency_p50_s | 1.000 |
 | latency_p95_s | 3.000 |
 | prompt_tokens_total | 30 |

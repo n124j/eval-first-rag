@@ -98,6 +98,8 @@ def run_eval(sut: SystemUnderTest, items: list[GoldenItem], k: int = 5) -> EvalR
         "correct_refusal_rate": _rate(
             sum(bool(r.correct_refusal) for r in unanswerable), len(unanswerable)
         ),
+        # Share of answerable items that were refused; lower is better.
+        "over_refusal_rate": _rate(sum(r.sut.refused for r in answerable), len(answerable)),
         "latency_p50_s": percentile(latencies, 50),
         "latency_p95_s": percentile(latencies, 95),
         "prompt_tokens_total": float(sum(r.sut.prompt_tokens for r in rows)),
