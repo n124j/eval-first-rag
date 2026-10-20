@@ -1,0 +1,8 @@
+title = "eval-first-rag gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake AWS key used as a test fixture and in the plan doc"
+regexes = ['''AKIAABCDEFGHIJKLMNOP''']
