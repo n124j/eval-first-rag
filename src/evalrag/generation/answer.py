@@ -71,8 +71,8 @@ def verify_citations(citations: list[Citation], chunks: list[Chunk]) -> Citation
             if citation.chunk_id not in unknown_ids:
                 unknown_ids.append(citation.chunk_id)
             continue
-        quote = citation.quote.strip()
-        if len(quote) < MIN_QUOTE_CHARS or _normalise(quote) not in texts[citation.chunk_id]:
+        quote = _normalise(citation.quote.strip())
+        if len(quote) < MIN_QUOTE_CHARS or quote not in texts[citation.chunk_id]:
             missing_quotes.append(f"{citation.chunk_id}: {citation.quote}")
     valid = bool(citations) and not unknown_ids and not missing_quotes
     return CitationReport(valid=valid, unknown_ids=unknown_ids, missing_quotes=missing_quotes)

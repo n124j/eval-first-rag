@@ -149,3 +149,54 @@ def test_refusal_must_match_exactly():
 
 def test_refusal_with_extra_words_is_not_refusal():
     assert not is_refusal(REFUSAL_TEXT + " But maybe it is X.")
+
+
+# NOTE: changing SYSTEM_PROMPT invalidates recorded LLM responses (cache keys hash the
+# messages), so any edit requires re-recording evals/recordings.
+PINNED_SYSTEM_PROMPT = (
+    "You answer questions using only the context provided in the user message. "
+    "Do not use outside knowledge.\n"
+    'Cite every claim as [chunk_id: "exact quote"], where chunk_id is the id shown in '
+    "square brackets above a context block and the quote is copied verbatim from that "
+    "chunk and is at least 8 characters long.\n"
+    "If the context does not contain the answer, reply with exactly "
+    "Not found in the provided documents. and nothing else."
+)
+
+
+def test_system_prompt_is_pinned_literal():
+    assert SYSTEM_PROMPT == PINNED_SYSTEM_PROMPT
+    assert build_messages("q?", [A])[0] == {"role": "system", "content": PINNED_SYSTEM_PROMPT}
+
+
+def test_verify_rejects_quote_padded_with_whitespace():
+    padded = "a      b"
+    assert len(padded) == MIN_QUOTE_CHARS
+    report = verify_citations([Citation("argparse#016", padded)], [chunk("argparse#016", "a b c")])
+    assert report == CitationReport(False, [], ["argparse#016: a      b"])
+
+
+def test_parse_citations_back_to_back_without_space():
+    text = '[a#001: "first quote here"][b#002: "second quote here"]'
+    assert parse_citations(text) == [
+        Citation("a#001", "first quote here"),
+        Citation("b#002", "second quote here"),
+    ]
+
+
+def test_parse_citations_quote_may_contain_colon_and_brackets_free_text():
+    assert parse_citations('[a#001: "key: value pair"]') == [Citation("a#001", "key: value pair")]
+    # A closing bracket inside the quote is accepted by the current regex.
+    assert parse_citations('[a#001: "has ] bracket"]') == [Citation("a#001", "has ] bracket")]
+
+
+def test_parse_citations_ignores_curly_quotes():
+    assert parse_citations("[a#001: “curly quoted text”]") == []
+
+
+def test_parse_citations_ignores_inner_double_quote():
+    assert parse_citations('[a#001: "has "inner" quotes"]') == []
+
+
+def test_parse_citations_inside_code_span_is_found():
+    assert parse_citations('`[a#001: "inside code span"]`') == [Citation("a#001", "inside code span")]
