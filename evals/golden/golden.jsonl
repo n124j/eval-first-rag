@@ -1,0 +1,60 @@
+{"id": "g001", "question": "When a value is already in a sorted list, where does bisect_left place the insertion point relative to the existing equal entries?", "expected_sources": ["bisect"], "answerable": true, "kind": "single"}
+{"id": "g002", "question": "In a heap managed by heapq, which element is always stored at index 0?", "expected_sources": ["heapq"], "answerable": true, "kind": "single"}
+{"id": "g003", "question": "What kind of string does secrets.token_hex return?", "expected_sources": ["secrets"], "answerable": true, "kind": "single"}
+{"id": "g004", "question": "How does shutil.copy2 differ from shutil.copy?", "expected_sources": ["shutil"], "answerable": true, "kind": "single"}
+{"id": "g005", "question": "What is the difference between statistics.stdev and statistics.pstdev?", "expected_sources": ["statistics"], "answerable": true, "kind": "single"}
+{"id": "g006", "question": "What does textwrap.dedent do to a block of text?", "expected_sources": ["textwrap"], "answerable": true, "kind": "single"}
+{"id": "g007", "question": "What does functools.partial return when I give it a function and some arguments?", "expected_sources": ["functools"], "answerable": true, "kind": "single"}
+{"id": "g008", "question": "What happens when I assign to a field of a dataclass declared with frozen=True?", "expected_sources": ["dataclasses"], "answerable": true, "kind": "single"}
+{"id": "g009", "question": "What is the Decimal quantize method used for?", "expected_sources": ["decimal"], "answerable": true, "kind": "single"}
+{"id": "g010", "question": "Which function in the uuid module generates a random UUID?", "expected_sources": ["uuid"], "answerable": true, "kind": "single"}
+{"id": "g011", "question": "Which characters are included in string.punctuation?", "expected_sources": ["string"], "answerable": true, "kind": "single"}
+{"id": "g012", "question": "What does operator.itemgetter return when it is created with several items?", "expected_sources": ["operator"], "answerable": true, "kind": "single"}
+{"id": "g013", "question": "How do I get the list of member names stored in a ZipFile archive?", "expected_sources": ["zipfile"], "answerable": true, "kind": "single"}
+{"id": "g014", "question": "Which components does urllib.parse.urlparse split a URL into?", "expected_sources": ["urllib.parse"], "answerable": true, "kind": "single"}
+{"id": "g015", "question": "Which re flag makes a regular expression match letters regardless of case?", "expected_sources": ["re"], "answerable": true, "kind": "single"}
+{"id": "g016", "question": "How do I duplicate a nested list so that changing the inner lists of the duplicate leaves the original untouched?", "expected_sources": ["copy"], "answerable": true, "kind": "single"}
+{"id": "g017", "question": "How can I break a long list into consecutive groups of three items, where the last group may be smaller?", "expected_sources": ["itertools"], "answerable": true, "kind": "single"}
+{"id": "g018", "question": "How can I make my program produce the same sequence of random numbers on every run?", "expected_sources": ["random"], "answerable": true, "kind": "single"}
+{"id": "g019", "question": "My file search with a '**' wildcard only looks one folder deep instead of descending into every subfolder; what am I missing?", "expected_sources": ["glob"], "answerable": true, "kind": "single"}
+{"id": "g020", "question": "How do I get a scratch folder that is deleted automatically when I am finished with it?", "expected_sources": ["tempfile"], "answerable": true, "kind": "single"}
+{"id": "g021", "question": "How do I compute a SHA-256 checksum of some bytes in Python?", "expected_sources": ["hashlib"], "answerable": true, "kind": "single"}
+{"id": "g022", "question": "How do I turn a text value like '2024-03-15' into a date object?", "expected_sources": ["datetime"], "answerable": true, "kind": "single"}
+{"id": "g023", "question": "How do I test whether two floating-point numbers are nearly equal rather than exactly equal?", "expected_sources": ["math"], "answerable": true, "kind": "single"}
+{"id": "g024", "question": "How should I pass values typed in by a user into an SQL statement so they cannot inject SQL?", "expected_sources": ["sqlite3"], "answerable": true, "kind": "single"}
+{"id": "g025", "question": "How do I send my program's log messages to a file instead of the terminal?", "expected_sources": ["logging"], "answerable": true, "kind": "single"}
+{"id": "g026", "question": "How do I run an external program and get back the text it wrote to standard output and standard error?", "expected_sources": ["subprocess"], "answerable": true, "kind": "single"}
+{"id": "g027", "question": "How do I stop two threads from modifying the same shared variable at the same moment?", "expected_sources": ["threading"], "answerable": true, "kind": "single"}
+{"id": "g028", "question": "How do I make one of my unit tests be skipped only when some condition holds?", "expected_sources": ["unittest"], "answerable": true, "kind": "single"}
+{"id": "g029", "question": "How should I write a type hint for a parameter that may be an int or may be None?", "expected_sources": ["typing"], "answerable": true, "kind": "single"}
+{"id": "g030", "question": "Is there a tidy way to ignore one particular exception raised inside a with block without writing try/except?", "expected_sources": ["contextlib"], "answerable": true, "kind": "single"}
+{"id": "g031", "question": "When I write rows of comma-separated data to a file on Windows, every row ends with an extra carriage return. What causes this?", "expected_sources": ["csv"], "answerable": true, "kind": "single"}
+{"id": "g032", "question": "My recursive function recomputes the same results over and over and is very slow; is there a built-in way to remember the results of earlier calls?", "expected_sources": ["functools"], "answerable": true, "kind": "single"}
+{"id": "g033", "question": "After I serialise a Python tuple to JSON text and read it back, it comes back as a list. Is that expected?", "expected_sources": ["json"], "answerable": true, "kind": "single"}
+{"id": "g034", "question": "When I split the file name '.bashrc' into a base name and an extension, why is the extension empty?", "expected_sources": ["os.path"], "answerable": true, "kind": "single"}
+{"id": "g035", "question": "Why do I get a TypeError when I check whether a timestamp that carries a time zone is earlier than one that does not?", "expected_sources": ["datetime"], "answerable": true, "kind": "single"}
+{"id": "g036", "question": "The help text of my command-line tool shows the value placeholder of an option in all capital letters; how can I change what is shown there?", "expected_sources": ["argparse"], "answerable": true, "kind": "single"}
+{"id": "g037", "question": "Why does my class decorated with @dataclass raise ValueError when I give a field an empty list as its default?", "expected_sources": ["dataclasses"], "answerable": true, "kind": "single"}
+{"id": "g038", "question": "My script hangs forever when the child program it started prints a lot of output and I wait for the child to exit; what is going on?", "expected_sources": ["subprocess"], "answerable": true, "kind": "single"}
+{"id": "g039", "question": "How can I let my program exit even though a background worker is still looping forever?", "expected_sources": ["threading"], "answerable": true, "kind": "single"}
+{"id": "g040", "question": "Is it safe to load saved Python objects from a file I downloaded from an unknown website?", "expected_sources": ["pickle"], "answerable": true, "kind": "single"}
+{"id": "g041", "question": "How do I turn an instance of a dataclass into a JSON string?", "expected_sources": ["dataclasses", "json"], "answerable": true, "kind": "multi"}
+{"id": "g042", "question": "How can I load the rows of a comma-separated text file into an SQLite table?", "expected_sources": ["csv", "sqlite3"], "answerable": true, "kind": "multi"}
+{"id": "g043", "question": "How do I copy an entire directory tree into a temporary directory that is removed automatically afterwards?", "expected_sources": ["tempfile", "shutil"], "answerable": true, "kind": "multi"}
+{"id": "g044", "question": "How do I move a date forward by one month, falling back to the last day of the next month when the same day number does not exist there (for example from January 31)?", "expected_sources": ["calendar", "datetime"], "answerable": true, "kind": "multi"}
+{"id": "g045", "question": "How do I combine all the integers in a list into one value with bitwise OR, without writing a lambda?", "expected_sources": ["functools", "operator"], "answerable": true, "kind": "multi"}
+{"id": "g046", "question": "How do I count how often each pair of adjacent elements occurs in a sequence?", "expected_sources": ["itertools", "collections"], "answerable": true, "kind": "multi"}
+{"id": "g047", "question": "How do I put every .log file from a folder into a new zip archive?", "expected_sources": ["glob", "zipfile"], "answerable": true, "kind": "multi"}
+{"id": "g048", "question": "How do I turn the query string of a URL into a dictionary and output that dictionary as JSON text?", "expected_sources": ["urllib.parse", "json"], "answerable": true, "kind": "multi"}
+{"id": "g049", "question": "How do I pick a random member of an Enum class?", "expected_sources": ["enum", "random"], "answerable": true, "kind": "multi"}
+{"id": "g050", "question": "How do I get the three tuples with the highest value in their second position from a large list, without sorting the whole list and without writing a lambda for the key?", "expected_sources": ["heapq", "operator"], "answerable": true, "kind": "multi"}
+{"id": "g051", "question": "How do I run several asyncio coroutines concurrently and wait until all of them have finished?", "expected_sources": [], "answerable": false, "kind": "unanswerable"}
+{"id": "g052", "question": "How do I open a TCP connection to a server and send a block of bytes over it?", "expected_sources": [], "answerable": false, "kind": "unanswerable"}
+{"id": "g053", "question": "How do I use a pool of worker processes to apply a function to every item of a list in parallel?", "expected_sources": [], "answerable": false, "kind": "unanswerable"}
+{"id": "g054", "question": "How do I parse an XML file and loop over all elements with a given tag name?", "expected_sources": [], "answerable": false, "kind": "unanswerable"}
+{"id": "g055", "question": "How do I start a simple web server that serves the files in the current folder over HTTP?", "expected_sources": [], "answerable": false, "kind": "unanswerable"}
+{"id": "g056", "question": "How do I generate a time-ordered version 7 UUID with the uuid module?", "expected_sources": [], "answerable": false, "kind": "unanswerable"}
+{"id": "g057", "question": "Which hashlib function produces bcrypt password hashes?", "expected_sources": [], "answerable": false, "kind": "unanswerable"}
+{"id": "g058", "question": "How can a pathlib Path notify me when a file in its directory is created or modified?", "expected_sources": [], "answerable": false, "kind": "unanswerable"}
+{"id": "g059", "question": "How do I read a CSV file into a pandas DataFrame and group the rows by a column?", "expected_sources": [], "answerable": false, "kind": "unanswerable"}
+{"id": "g060", "question": "How do I declare a ForeignKey between two Django models?", "expected_sources": [], "answerable": false, "kind": "unanswerable"}
