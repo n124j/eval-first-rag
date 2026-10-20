@@ -1,6 +1,9 @@
+from pathlib import Path
+
 import pytest
 
 from evalrag.generation.answer import (
+    FEW_SHOT,
     MIN_QUOTE_CHARS,
     REFUSAL_TEXT,
     SYSTEM_PROMPT,
@@ -29,25 +32,90 @@ def test_constants():
     assert REFUSAL_TEXT in SYSTEM_PROMPT
 
 
+EXAMPLE_ANSWER_USER = (
+    "Question: What does spin() return?\n"
+    "\n"
+    "Sources:\n"
+    "\n"
+    "Source id: widgets#004\n"
+    "Text: The spin() function rotates a widget. It returns the new angle in degrees.\n"
+    "\n"
+    "Source id: widgets#007\n"
+    "Text: The hide() function removes a widget from the screen until show() is called.\n"
+    "\n"
+    "Question: What does spin() return?\n"
+    "Answer:"
+)
+EXAMPLE_ANSWER = (
+    'spin() returns the new angle of the widget [widgets#004: "returns the new angle in degrees"].'
+)
+EXAMPLE_REFUSAL_USER = (
+    "Question: How do I paint a widget blue?\n"
+    "\n"
+    "Sources:\n"
+    "\n"
+    "Source id: widgets#002\n"
+    "Text: A widget has a name and a size. The size is given in pixels.\n"
+    "\n"
+    "Source id: gadgets#010\n"
+    "Text: The gadget registry keeps one entry for every gadget that was created.\n"
+    "\n"
+    "Question: How do I paint a widget blue?\n"
+    "Answer:"
+)
+
+
 def test_build_messages_is_deterministic_and_ordered():
     chunks = [A, B]
     first = build_messages("How do I join paths?", chunks)
     assert first == build_messages("How do I join paths?", chunks)
     assert first == [
         {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": EXAMPLE_ANSWER_USER},
+        {"role": "assistant", "content": EXAMPLE_ANSWER},
+        {"role": "user", "content": EXAMPLE_REFUSAL_USER},
+        {"role": "assistant", "content": REFUSAL_TEXT},
         {
             "role": "user",
             "content": (
-                "[argparse#016]\n"
-                "The add_argument method defines how a single argument is parsed.\n"
+                "Question: How do I join paths?\n"
                 "\n"
-                "[os.path#003]\n"
-                "os.path.join joins\n  path   components intelligently.\n"
+                "Sources:\n"
                 "\n"
-                "Question: How do I join paths?"
+                "Source id: argparse#016\n"
+                "Text: The add_argument method defines how a single argument is parsed.\n"
+                "\n"
+                "Source id: os.path#003\n"
+                "Text: os.path.join joins\n  path   components intelligently.\n"
+                "\n"
+                "Question: How do I join paths?\n"
+                "Answer:"
             ),
         },
     ]
+
+
+def test_build_messages_has_no_bare_bracketed_chunk_id_header():
+    # v0 put "[chunk_id]" on its own line above each chunk and the 1B model echoed it.
+    content = build_messages("How do I join paths?", [A, B])[-1]["content"]
+    assert "[argparse#016]" not in content and "[os.path#003]" not in content
+
+
+def test_few_shot_examples_follow_the_contract_with_made_up_sources():
+    assert [(q, a) for q, _, a in FEW_SHOT] == [
+        ("What does spin() return?", EXAMPLE_ANSWER),
+        ("How do I paint a widget blue?", REFUSAL_TEXT),
+    ]
+    (_, answer_sources, answer), (_, refusal_sources, refusal) = FEW_SHOT
+    citations = parse_citations(answer)
+    assert citations == [Citation("widgets#004", "returns the new angle in degrees")]
+    answer_chunks = [chunk(cid, text) for cid, text in answer_sources]
+    assert verify_citations(citations, answer_chunks).valid is True
+    assert is_refusal(refusal)
+    example_docs = {cid.split("#")[0] for cid, _ in answer_sources + refusal_sources}
+    assert example_docs == {"widgets", "gadgets"}
+    corpus_docs = {p.stem for p in (Path(__file__).parents[2] / "corpus").glob("*.txt")}
+    assert corpus_docs and not example_docs & corpus_docs
 
 
 def test_build_messages_rejects_empty_question():
@@ -152,14 +220,16 @@ def test_refusal_with_extra_words_is_not_refusal():
 
 
 # NOTE: changing SYSTEM_PROMPT invalidates recorded LLM responses (cache keys hash the
-# messages), so any edit requires re-recording evals/recordings.
+# messages), so any edit requires re-recording evals/recordings. The same holds for the
+# few-shot turns and the user-message layout (pinned in the build_messages tests above).
 PINNED_SYSTEM_PROMPT = (
-    "You answer questions using only the context provided in the user message. "
-    "Do not use outside knowledge.\n"
-    'Cite every claim as [chunk_id: "exact quote"], where chunk_id is the id shown in '
-    "square brackets above a context block and the quote is copied verbatim from that "
-    "chunk and is at least 8 characters long.\n"
-    "If the context does not contain the answer, reply with exactly "
+    "You answer questions using only the sources in the user message. "
+    "Do not use outside knowledge and do not copy the sources.\n"
+    "Answer in one or two short sentences. End each sentence with a citation: the source id, "
+    "a colon, and a quote copied word for word from that source, all in square brackets, "
+    'like [widgets#004: "returns the new angle in degrees"]. '
+    "The quote must be at least 8 characters long.\n"
+    "If the sources do not answer the question, reply with exactly "
     "Not found in the provided documents. and nothing else."
 )
 

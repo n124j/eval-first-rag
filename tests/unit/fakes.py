@@ -51,7 +51,7 @@ class ScriptedLLM:
         user = messages[-1]["content"]
         if "unanswerable" in user.rsplit("Question:", 1)[-1]:
             return Completion(REFUSAL_TEXT, 10, 3, 0.1)
-        match = re.search(r"\[([\w.\-]+#\d{3})\]\n(.+)", user)
+        match = re.search(r"Source id: ([\w.\-]+#\d{3})\nText: (.+)", user)
         assert match is not None
         quote = " ".join(match.group(2).split()[:4])
         return Completion(f'Answer. [{match.group(1)}: "{quote}"]', 10, 5, 0.1)

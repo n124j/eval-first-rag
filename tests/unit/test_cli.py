@@ -533,3 +533,62 @@ def test_refresh_refusal_leaves_everything_untouched(tmp_path, corpus, golden):
     assert run(refresh_args(tmp_path, corpus, golden, tmp_path / "d")) == 1
     _assert_untouched(tmp_path, emb, llm)
     assert not (tmp_path / "d").exists()
+
+
+class SourceCountingLLM(ScriptedLLM):
+    """Records how many sources each real (final) user message carried."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.source_counts: list[int] = []
+
+    def complete(self, messages):
+        self.source_counts.append(messages[-1]["content"].count("Source id: "))
+        return super().complete(messages)
+
+
+class SourceCountingFactory(FakeFactory):
+    def __init__(self) -> None:
+        self.llm_instance = SourceCountingLLM()
+
+    def live_llm(self, settings):
+        return self.llm_instance
+
+
+@pytest.mark.parametrize("command", ["eval", "refresh-recordings"])
+def test_cli_k_has_no_hard_coded_default(command):
+    required = {
+        "eval": ["--golden", "g", "--report-out", "r", "--metrics-out", "m"],
+        "refresh-recordings": ["--golden", "g", "--embeddings-out", "e", "--llm-out", "l"],
+    }[command]
+    assert _build_parser().parse_args([command, *required]).k is None
+
+
+@pytest.mark.parametrize(
+    ("env_extra", "argv_extra", "expected_k"),
+    [
+        ({}, [], 3),  # Settings default top_k
+        ({"TOP_K": "2"}, [], 2),  # TOP_K setting
+        ({"TOP_K": "2"}, ["--k", "1"], 1),  # explicit --k wins
+    ],
+)
+def test_cli_eval_k_defaults_to_top_k_setting_for_pipeline_and_metrics(
+    tmp_path, corpus, golden, env_extra, argv_extra, expected_k
+):
+    data = ingest_live(tmp_path, corpus)
+    factory = SourceCountingFactory()
+    args = eval_args(tmp_path, corpus, golden, data, *argv_extra)
+    assert run(args, env={**ENV, **env_extra}, factory=factory) == 0
+    assert factory.llm_instance.source_counts
+    assert set(factory.llm_instance.source_counts) == {expected_k}
+    report = (tmp_path / "out" / "report.md").read_text(encoding="utf-8")
+    assert f"| k | {expected_k} |" in report
+
+
+def test_refresh_k_defaults_to_top_k_setting(tmp_path, corpus, golden):
+    factory = SourceCountingFactory()
+    args = refresh_args(tmp_path, corpus, golden, tmp_path / "data")
+    assert run(args, env={**ENV, "TOP_K": "2"}, factory=factory) == 0
+    assert set(factory.llm_instance.source_counts) == {2}
+    report = (tmp_path / "out" / "live.md").read_text(encoding="utf-8")
+    assert "| k | 2 |" in report

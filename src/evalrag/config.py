@@ -4,6 +4,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+# Number of retrieved chunks passed to the model; chosen on the dev set (ADR 0005).
+DEFAULT_TOP_K = 3
+
 
 class ConfigError(ValueError):
     """Raised when configuration is missing or invalid."""
@@ -40,7 +43,7 @@ class Settings:
     embed_base_url: str
     embed_model: str
     data_dir: Path = Path("data")
-    top_k: int = 5
+    top_k: int = DEFAULT_TOP_K
     chunk_size: int = 200
     chunk_overlap: int = 40
 
@@ -52,7 +55,7 @@ class Settings:
             embed_base_url=_endpoint(env, "EMBED_BASE_URL", require_endpoints),
             embed_model=_endpoint(env, "EMBED_MODEL", require_endpoints),
             data_dir=Path(env.get("DATA_DIR") or "data"),
-            top_k=_int(env, "TOP_K", 5, 1),
+            top_k=_int(env, "TOP_K", DEFAULT_TOP_K, 1),
             chunk_size=_int(env, "CHUNK_SIZE", 200, 1),
             chunk_overlap=_int(env, "CHUNK_OVERLAP", 40, 0),
         )

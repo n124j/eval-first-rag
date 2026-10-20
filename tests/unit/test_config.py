@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from evalrag.config import ConfigError, Settings
+from evalrag.config import DEFAULT_TOP_K, ConfigError, Settings
 
 REQUIRED = {
     "LLM_BASE_URL": "http://localhost:1/v1",
@@ -20,16 +20,16 @@ def test_from_env_reads_required_and_defaults():
     assert s.embed_base_url == "http://localhost:2/v1"
     assert s.embed_model == "embed-x"
     assert s.data_dir == Path("data")
-    assert s.top_k == 5
+    assert s.top_k == DEFAULT_TOP_K == 3
     assert s.chunk_size == 200
     assert s.chunk_overlap == 40
 
 
 def test_from_env_reads_optional_overrides():
-    env = {**REQUIRED, "DATA_DIR": "/tmp/d", "TOP_K": "3", "CHUNK_SIZE": "50", "CHUNK_OVERLAP": "0"}
+    env = {**REQUIRED, "DATA_DIR": "/tmp/d", "TOP_K": "7", "CHUNK_SIZE": "50", "CHUNK_OVERLAP": "0"}
     s = Settings.from_env(env)
     assert s.data_dir == Path("/tmp/d")
-    assert (s.top_k, s.chunk_size, s.chunk_overlap) == (3, 50, 0)
+    assert (s.top_k, s.chunk_size, s.chunk_overlap) == (7, 50, 0)
 
 
 def test_from_env_reports_missing_key():
@@ -79,10 +79,15 @@ def test_settings_is_frozen():
 
 
 def test_settings_require_endpoints_false_defaults_to_empty_strings():
-    s = Settings.from_env({"TOP_K": "3"}, require_endpoints=False)
+    s = Settings.from_env({"TOP_K": "7"}, require_endpoints=False)
     assert (s.llm_base_url, s.llm_model, s.embed_base_url, s.embed_model) == ("", "", "", "")
-    assert s.top_k == 3
+    assert s.top_k == 7
     with pytest.raises(ConfigError):
         Settings.from_env({"TOP_K": "0"}, require_endpoints=False)
     with pytest.raises(ConfigError):
         Settings.from_env({}, require_endpoints=True)
+
+
+def test_dataclass_default_top_k_matches_from_env_default():
+    direct = Settings(llm_base_url="", llm_model="", embed_base_url="", embed_model="")
+    assert direct.top_k == Settings.from_env({}, require_endpoints=False).top_k == DEFAULT_TOP_K

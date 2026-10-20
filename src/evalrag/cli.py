@@ -142,7 +142,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--metrics-out", required=True)
     p.add_argument("--corpus", default="corpus")
     p.add_argument("--data-dir")
-    p.add_argument("--k", type=_positive_int, default=5)
+    p.add_argument("--k", type=_positive_int, help="default: the TOP_K setting")
     _exclusive(p, "--record-llm", "--replay-llm")
     _exclusive(p, "--record-embeddings", "--replay-embeddings")
     p.add_argument("--model")
@@ -157,7 +157,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--llm-out", required=True)
     p.add_argument("--corpus", default="corpus")
     p.add_argument("--data-dir")
-    p.add_argument("--k", type=_positive_int, default=5)
+    p.add_argument("--k", type=_positive_int, help="default: the TOP_K setting")
     p.add_argument("--report-out", default="evals/reports/live.md")
     p.add_argument("--metrics-out", default="evals/reports/live-metrics.json")
     p.add_argument("--model")
@@ -224,8 +224,10 @@ def _eval_step(args, env, settings, embedder, llm) -> None:
     """Run the golden set, flush both components, write outputs; shared with refresh."""
     known = {doc.doc_id for doc in load_corpus(Path(args.corpus))}
     items = load_golden(Path(args.golden), known_sources=known)
-    with open_pipeline(settings, _data_dir(args, settings), args.k, embedder, llm) as pipeline:
-        result = run_eval(make_sut(pipeline), items, k=args.k)
+    # One k for both the pipeline and the metrics; it defaults to the TOP_K setting.
+    k = args.k if args.k is not None else settings.top_k
+    with open_pipeline(settings, _data_dir(args, settings), k, embedder, llm) as pipeline:
+        result = run_eval(make_sut(pipeline), items, k=k)
     _flush(llm)
     _flush(embedder)
 
