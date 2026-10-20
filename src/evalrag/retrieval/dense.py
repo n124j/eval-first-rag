@@ -1,5 +1,6 @@
 """Dense (cosine) vector index held in memory with .npz persistence."""
 
+import contextlib
 import os
 from pathlib import Path
 
@@ -89,7 +90,8 @@ class DenseIndex:
                 os.fsync(fh.fileno())
             os.replace(tmp, path)
         except BaseException:
-            tmp.unlink(missing_ok=True)
+            with contextlib.suppress(OSError):
+                tmp.unlink(missing_ok=True)
             raise
 
     @classmethod

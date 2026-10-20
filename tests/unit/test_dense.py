@@ -86,11 +86,14 @@ def test_ties_broken_by_chunk_id():
     assert [h.chunk_id for h in hits] == ["a", "b", "c"]
 
 
-def test_near_ties_within_1e_9_order_by_chunk_id():
+def test_near_ties_below_rounding_step_order_by_chunk_id():
+    # "a" has a raw cosine just below 1.0 (about 1 - 1.8e-7) that rounds to 1.0;
+    # a raw-score tie-break would wrongly put "b" first.
     idx = DenseIndex()
-    idx.add(["b", "a"], np.array([[1.0, 1e-4], [1.0, 0.0]], dtype=np.float32))
+    idx.add(["b", "a"], np.array([[1.0, 0.0], [1.0, 6e-4]], dtype=np.float32))
     hits = idx.search(np.array([1.0, 0.0], dtype=np.float32), 2)
     assert [h.chunk_id for h in hits] == ["a", "b"]
+    assert [h.score for h in hits] == [1.0, 1.0]
 
 
 def test_scores_are_rounded_to_6_decimals():

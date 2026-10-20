@@ -4,6 +4,7 @@ Record/replay lets the eval run offline and deterministically: vectors are
 recorded once against the live server, then replayed from an ``.npz`` cache.
 """
 
+import contextlib
 import hashlib
 import json
 import os
@@ -138,7 +139,8 @@ class RecordingEmbedder:
                 os.fsync(fh.fileno())
             os.replace(tmp, self.cache_path)
         except BaseException:
-            tmp.unlink(missing_ok=True)
+            with contextlib.suppress(OSError):
+                tmp.unlink(missing_ok=True)
             raise
 
 
