@@ -67,3 +67,33 @@ The first `docker compose up --build` downloads the base image and installs the 
 takes a few minutes. The `init` step then builds the index; later runs reuse the `evalrag-data`
 volume and the build cache. The first question after startup can be slow while the model server
 loads its model. Run `docker compose down -v` to delete the volumes and start clean.
+
+## Verified
+
+Verified on 2026-10-20 with Docker 27.4.0 and Docker Compose v2.31.0-desktop.2 (Windows 11 host,
+Docker Desktop), with no `.env` file, so the compose defaults were used as shipped.
+
+What was run: `docker compose up -d --build` (default profile: `init` and `api`), a check of the
+runtime user and the `/data` volume, `GET /health`, two `POST /ask` calls against LM Studio on the
+host (`http://host.docker.internal:1234/v1`, `qwen2.5-7b-instruct-1m`), then `docker compose down -v`.
+
+Observed:
+
+- Build plus start took about 29 s on the first run (base image pull and PyPI downloads included).
+  The image `eval-first-rag:local` is 326 MB.
+- `init` exited 0 and printed `ingested 41 documents, 1289 chunks, dim 768`. The four index files
+  (`chunks.jsonl`, `dense.npz`, `ingest.json`, `keyword.sqlite`) were in `/data`, owned by the
+  runtime user.
+- `api` ran as uid 10001 (`evalrag`, not root); the container healthcheck reported `healthy` and
+  `GET /health` returned `{"status":"ok"}`.
+- `POST /ask` with "How does shutil.copy2 differ from shutil.copy?" returned HTTP 200 in about 4 s
+  with a correct one-sentence answer, one citation (`shutil#006`) and `refused: false`. The model
+  rewrote the double quotes in its quote as single quotes, so `citations_valid` was `false`: the
+  verbatim-quote check is strict. This is model behaviour, not a packaging problem.
+- The off-topic question "Who painted the Mona Lisa?" was abstained by the retrieval-confidence
+  guard (`abstained: true`, `refused: true`, answered in about 0.07 s, i.e. without an LLM call).
+- `docker compose down -v` removed the containers, the network and the `evalrag-data` volume.
+
+Limitations: one machine, a Windows host, CPU-only container (no GPU), the model server was the
+host's LM Studio (not part of the stack), and only two questions were asked, so this shows the
+packaging works end to end, not answer quality. The `ollama` profile was not run.
