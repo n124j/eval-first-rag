@@ -6,6 +6,7 @@ recorded once against the live server, then replayed from an ``.npz`` cache.
 
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Literal, Protocol
 
@@ -129,8 +130,16 @@ class RecordingEmbedder:
         vectors = np.stack([self._vectors[k] for k in keys]).astype(np.float16)
         meta = json.dumps({"model": self.model, "dim": int(vectors.shape[1])})
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.cache_path, "wb") as fh:
-            np.savez(fh, keys=np.array(keys, dtype=str), vectors=vectors, meta=np.array(meta))
+        tmp = self.cache_path.with_name(self.cache_path.name + ".tmp")
+        try:
+            with open(tmp, "wb") as fh:
+                np.savez(fh, keys=np.array(keys, dtype=str), vectors=vectors, meta=np.array(meta))
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, self.cache_path)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
 
 
 class ReplayEmbedder:

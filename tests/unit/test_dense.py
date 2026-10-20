@@ -84,3 +84,35 @@ def test_ties_broken_by_chunk_id():
     idx.add(["b", "a", "c"], np.ones((3, 2), dtype=np.float32))
     hits = idx.search(np.ones(2, dtype=np.float32), 3)
     assert [h.chunk_id for h in hits] == ["a", "b", "c"]
+
+
+def test_near_ties_within_1e_9_order_by_chunk_id():
+    idx = DenseIndex()
+    idx.add(["b", "a"], np.array([[1.0, 1e-4], [1.0, 0.0]], dtype=np.float32))
+    hits = idx.search(np.array([1.0, 0.0], dtype=np.float32), 2)
+    assert [h.chunk_id for h in hits] == ["a", "b"]
+
+
+def test_scores_are_rounded_to_6_decimals():
+    idx = DenseIndex()
+    idx.add(["a"], np.array([[1.0, 2.0, 3.0]], dtype=np.float32))
+    score = idx.search(np.array([3.0, 1.0, 2.0], dtype=np.float32), 1)[0].score
+    assert score == round(score, 6)
+
+
+def test_failed_save_keeps_previous_file_and_leaves_no_tmp(tmp_path: Path, monkeypatch):
+    path = tmp_path / "d.npz"
+    idx = build()
+    idx.save(path)
+    before = path.read_bytes()
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["d.npz"]
+
+    def failing(fh, **arrays):
+        fh.write(b"partial garbage")
+        raise OSError("disk full")
+
+    monkeypatch.setattr(np, "savez", failing)
+    with pytest.raises(OSError):
+        idx.save(path)
+    assert path.read_bytes() == before
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["d.npz"]

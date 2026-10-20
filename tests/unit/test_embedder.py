@@ -12,6 +12,7 @@ from evalrag.retrieval.embedder import (
     RecordingEmbedder,
     ReplayEmbedder,
     ReplayMiss,
+    cache_key,
 )
 
 
@@ -120,15 +121,15 @@ def test_recording_then_replay_roundtrip(tmp_path: Path):
     path = tmp_path / "cache.npz"
     rec = RecordingEmbedder(CountingEmbedder(), path, model="nomic")
     live = rec.embed(["a", "b"])
-    rec.embed(["a"], kind="query")
+    query_live = rec.embed(["a"], kind="query")
     rec.flush()
     replay = ReplayEmbedder(path)
     got = replay.embed(["a", "b"])
     assert got.dtype == np.float32
-    np.testing.assert_allclose(got, live, rtol=1e-2)
+    assert np.array_equal(got, live)
     assert replay.model == "nomic"
     assert replay.dim == 4
-    assert replay.embed(["a"], kind="query").shape == (1, 4)
+    assert np.array_equal(replay.embed(["a"], kind="query"), query_live)
     assert replay.embed([]).shape == (0, 0)
 
 
@@ -185,3 +186,44 @@ def test_replay_never_calls_network(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(httpx.Client, "send", boom)
     assert ReplayEmbedder(path).embed(["a"]).shape == (1, 4)
+
+
+class KindAwareEmbedder:
+    def embed(self, texts, kind="document"):
+        base = 1.0 if kind == "document" else 100.0
+        return np.array([[base + i for i in range(4)] for _ in texts], dtype=np.float32)
+
+
+def test_document_and_query_entries_stored_separately(tmp_path: Path):
+    path = tmp_path / "cache.npz"
+    rec = RecordingEmbedder(KindAwareEmbedder(), path)
+    doc = rec.embed(["same"], kind="document")
+    query = rec.embed(["same"], kind="query")
+    rec.flush()
+    with np.load(path) as data:
+        keys = {str(k) for k in data["keys"]}
+    assert keys == {cache_key("document", "same"), cache_key("query", "same")}
+    replay = ReplayEmbedder(path)
+    assert np.array_equal(replay.embed(["same"], kind="document"), doc)
+    assert np.array_equal(replay.embed(["same"], kind="query"), query)
+    assert not np.array_equal(doc, query)
+
+
+def _failing_savez(fh, **arrays):
+    fh.write(b"partial garbage")
+    raise OSError("disk full")
+
+
+def test_failed_flush_keeps_previous_file_and_leaves_no_tmp(tmp_path: Path, monkeypatch):
+    path = tmp_path / "cache.npz"
+    rec = RecordingEmbedder(CountingEmbedder(), path)
+    rec.embed(["a"])
+    rec.flush()
+    before = path.read_bytes()
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["cache.npz"]
+    rec.embed(["b"])
+    monkeypatch.setattr(np, "savez", _failing_savez)
+    with pytest.raises(OSError):
+        rec.flush()
+    assert path.read_bytes() == before
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["cache.npz"]

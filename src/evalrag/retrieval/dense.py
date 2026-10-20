@@ -1,5 +1,6 @@
 """Dense (cosine) vector index held in memory with .npz persistence."""
 
+import os
 from pathlib import Path
 
 import numpy as np
@@ -65,9 +66,11 @@ class DenseIndex:
             )
         query = _normalise(query)[0]
         scores = self._matrix @ query
-        order = sorted(range(len(self._ids)), key=lambda i: (-float(scores[i]), self._ids[i]))
+        # Round so last-bit BLAS differences cannot reorder ties; report what we sorted by.
+        rounded = [round(float(s), 6) for s in scores]
+        order = sorted(range(len(self._ids)), key=lambda i: (-rounded[i], self._ids[i]))
         return [
-            Hit(chunk_id=self._ids[i], score=float(scores[i]), rank=rank)
+            Hit(chunk_id=self._ids[i], score=rounded[i], rank=rank)
             for rank, i in enumerate(order[:k], start=1)
         ]
 
@@ -78,8 +81,16 @@ class DenseIndex:
             matrix = self._matrix
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "wb") as fh:
-            np.savez(fh, ids=np.array(self._ids, dtype=str), vectors=matrix)
+        tmp = path.with_name(path.name + ".tmp")
+        try:
+            with open(tmp, "wb") as fh:
+                np.savez(fh, ids=np.array(self._ids, dtype=str), vectors=matrix)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, path)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
 
     @classmethod
     def load(cls, path: Path) -> "DenseIndex":
