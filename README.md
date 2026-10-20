@@ -1,10 +1,20 @@
 # eval-first-rag
 
 A small retrieval-augmented question-answering system over the Python standard-library
-documentation, built evaluation-first: every design change was driven by a measurement, and
-every published number can be reproduced offline from committed recordings. It runs free and
-locally (LM Studio on a desktop GPU), and its CI gate replays recorded model responses, so it
-needs no GPU, no model and no API key.
+documentation, built evaluation-first. Every golden-set number of the final run (guard on and
+off), of the golden failure analysis and of the retrieval ablation reproduces offline, byte
+for byte, from the committed recordings (`evalrag eval` with the `--replay-*` flags, then
+`evalrag gate`; the acceptance tests check this). The three live variance re-runs and the
+Docker timings came from scratch runs and are reported, not reproducible. Every change made
+after the first measurement (prompt, `k`, citation parser, abstention guard) was driven by
+measurements on a separate dev set; the raw dev runs were scratch runs that are not committed
+and are summarised in [ADR 0005](docs/adr/0005-prompt-iteration.md) and
+[ADR 0006](docs/adr/0006-retrieval-confidence-abstention.md). A few early design choices were
+made before any measurement: hybrid retrieval itself, chunks of 200 words with 40 words of
+overlap, and the RRF constant k=60 with 50 candidates per list
+([ADR 0002](docs/adr/0002-hybrid-retrieval.md)). It runs free and locally (LM Studio on a
+desktop GPU), and its CI gate replays recorded model responses, so it needs no GPU, no model
+and no API key.
 
 ## What this is
 
@@ -25,15 +35,19 @@ needs no GPU, no model and no API key.
   completions and fails if any metric regresses past `evals/baseline.json`
   ([ADR 0004](docs/adr/0004-recorded-responses-in-ci.md)).
 
-"Agentic" here means a small, fixed loop: retrieve, decide whether to abstain, answer, verify
-the citations. It is not an open-ended agent that plans or chooses tools. There is no RAG
-framework; the pipeline is about 2,500 lines of plain Python
+The pipeline is a small, fixed loop: retrieve, decide whether to abstain, answer, verify the
+citations. There is no RAG framework; the pipeline is about 2,500 lines of plain Python
 ([ADR 0003](docs/adr/0003-no-rag-framework.md)).
 
 ## Results
 
 The golden set is held-out: 60 questions (40 single-document, 10 multi-document, 10
-unanswerable), frozen before measurement and never used for tuning. Rates are over the 50
+unanswerable), frozen before the first measurement. It was measured twice: the v0 run with the
+1B model, then the final run below. The v0 failures were inspected and informed which levers
+were tried on the dev set; the dev-set author read the golden questions to keep the two sets
+disjoint; all tuning ran on the dev set. After the final run the golden set was used only for
+analysis (the guard on/off comparison, the failure taxonomy and the retrieval ablation). Rates
+are over the 50
 answerable items (recall, MRR, citation validity, over-refusal) or the 10 unanswerable items
 (correct refusal).
 
@@ -54,12 +68,19 @@ Measured 2026-10-20 with `qwen2.5-7b-instruct-1m` (Qwen2.5-7B-Instruct-1M, Q4_K_
 Ryzen 9 3900X, 128 GB RAM, Radeon RX 6600 XT 8 GB; k=3, chunks of 200 words with 40 words of
 overlap. One live recording (guard off), replayed with the guard on. Latency and token rows
 are not comparable between the columns: an abstention makes no model call and counts as zero.
-Four live runs gave identical quality metrics (spread 0 at temperature 0 on one machine).
+Four live runs gave identical quality metrics (spread 0 at temperature 0 on one machine): the
+recorded run and three re-runs that were uncommitted scratch runs.
 
-**How to read this.** Retrieval is strong: the right document is in the top 3 for 0.88 of
-answerable questions (MRR 0.90). Generation is the weak part: only 0.30 of answerable
-questions (15 of 50) got a fully valid citation, which is exactly at the pre-agreed stop floor
-(below 0.30 the baseline would have been blocked; one fewer valid answer would have done it).
+**How to read this.** Retrieval is strong: `recall_at_k` is the mean, over the 50 answerable
+questions, of the fraction of expected documents found in the top 3 (0.88; 46 of 50 have at
+least one expected document there and 42 of 50 have all of them; MRR 0.90). Generation is the
+weak part: only 0.30 of answerable questions (15 of 50) got a fully valid citation, which is
+exactly at the pre-agreed stop floor (below 0.30 the baseline would have been blocked; one
+fewer valid answer would have done it). And 0.30 is an upper bound on verified grounding: one
+of the 15, g016 (duplicating a nested list), is not grounded. Retrieval returned no `copy`
+chunk, and the model answered "use deepcopy" from its own knowledge and cited `itertools#017`
+with a quote that is verbatim but irrelevant. The other 14 valid answers were not
+individually checked for support.
 The dev set did not predict this: the same configuration scored 0.667 on the 20-item dev set,
 and that result did not transfer to the held-out golden set. Over-refusal is 0.18 (9 of 50
 answerable questions refused). The guard's effect is narrow: it refused one more unanswerable
@@ -70,8 +91,8 @@ The story in four measurements:
 1. **v0, 1B model:** `llama-3.2-1b-instruct` with the first prompt produced 0 valid citations
    of 60 and refused none of the 10 unanswerable questions, while retrieval was already fine
    (recall@5 0.90). Kept as evidence in [`evals/reports/`](evals/reports/README.md).
-2. **Prompt iteration on the dev set:** five rounds with the 1B model on a separate 20-item dev
-   set; all scored 0.0 valid citations, so the 1B model was judged insufficient for this
+2. **Prompt iteration on the dev set:** the v0 baseline plus four tuning rounds with the 1B
+   model on a separate 20-item dev set; all scored 0.0 valid citations, so the 1B model was judged insufficient for this
    format ([ADR 0005](docs/adr/0005-prompt-iteration.md)).
 3. **7B model plus a parser fix, on dev:** `qwen2.5-7b-instruct-1m` followed the format, and a
    parser change to allow `"` inside quotes took dev citation validity to 0.667 (8 of 12).
@@ -205,10 +226,11 @@ Optional: `TOP_K` (default 3), `MIN_DENSE_SCORE` (default 0.67; 0 disables the g
 
 ```bash
 evalrag ingest --corpus corpus --data-dir data
-evalrag ask "How does shutil.copy2 differ from shutil.copy?"
+evalrag ask "What does math.gcd return when it is called with no arguments?"
 ```
 
-`ask` prints the answer, each citation, `refused: true|false` and
+The question is illustrative (it is in neither the golden nor the dev set); no response for it
+is claimed here. `ask` prints the answer, each citation, `refused: true|false` and
 `citations valid: true|false`. `evalrag eval` without the `--replay-*` flags runs a question
 set live; use the dev set (`evals/dev/dev.jsonl`) for any tuning and keep the golden set
 held out.
@@ -235,16 +257,20 @@ With the live variables set and an index in `DATA_DIR`:
 ```bash
 uvicorn --factory evalrag.api:app_from_env --port 8000
 curl http://localhost:8000/health
-curl -X POST http://localhost:8000/ask -H "Content-Type: application/json" -d '{"question": "Who painted the Mona Lisa?"}'
+curl -X POST http://localhost:8000/ask -H "Content-Type: application/json" -d '{"question": "What does math.gcd return when it is called with no arguments?"}'
 ```
+
+The question is illustrative, as above; no response for it is claimed.
 
 `GET /health` returns `{"status":"ok"}`. `POST /ask` takes `{"question": "..."}` (1 to 2000
 characters) and returns `answer`, `citations` (`chunk_id`, `quote`), `refused`,
-`citations_valid`, `retrieved_ids` and `abstained`. In the verified Docker run, the question
-above was abstained by the guard (`abstained: true`, `refused: true`, about 0.07 s, no model
-call), and "How does shutil.copy2 differ from shutil.copy?" got a correct one-sentence answer
-citing `shutil#006` with `citations_valid: false`, because the model rewrote the double quotes
-in its quote as single quotes. The API has no authentication; keep it local.
+`citations_valid`, `retrieved_ids` and `abstained`. The Docker smoke test re-ran golden item
+g004 ("How does shutil.copy2 differ from shutil.copy?") live and reproduced the recorded
+outcome: the model quoted with single quotes where the chunk has double quotes, so the verbatim
+check rejected it (`citations_valid: false`). This confirms that the Docker path reproduces
+recorded behaviour; it is not new evidence. Dev item d020 ("Who painted the Mona Lisa?") was
+abstained by the guard there (`abstained: true`, about 0.07 s, no model call). The API has no
+authentication; keep it local.
 
 ### Docker
 
@@ -264,8 +290,11 @@ baseline value (the guard-on column above), a tolerance and a direction. `evalra
 (exit 1) if any metric is worse than its baseline by more than its tolerance, or is missing
 or not finite; improvements pass. Tolerances: 0.02 for `recall_at_k`, `mrr` and
 `citation_validity_rate` (about one answerable item), 0.10 for the two refusal rates (one
-unanswerable item), 25% of the value for latencies and 5% for token totals. They are floors,
-because the observed spread across four live runs was zero.
+unanswerable item for `correct_refusal_rate`, but 5 answerable items for `over_refusal_rate`),
+25% of the value for latencies and 5% for token totals. They are floors, because the observed
+spread across the recorded run and three uncommitted scratch re-runs was zero. Note that the
+citation tolerance lets the gate pass at 0.28, below the 0.30 stop floor that applied to the
+recording itself.
 
 A pass means the code still reproduces the scores of a FIXED recording: retrieval, prompt
 construction (a changed prompt causes replay misses), citation parsing and verification,
@@ -300,14 +329,16 @@ In rough order of importance:
 1. **Small, single-author evaluation sets.** The golden set has 60 items and the dev set 20,
    all written by one author. One answerable golden item moves a rate by 0.02, one
    unanswerable item by 0.10. Differences of a few items are not evidence.
-2. **Citation validity is low and checks existence, not support.** 0.30 is at the stop floor.
-   A valid citation means the quoted text exists in a retrieved chunk, not that it supports
-   the answer; the dev analysis found valid quotes attached to claims from the model's own
-   knowledge.
+2. **Citation validity is low and checks existence, not support.** 0.30 is at the stop floor,
+   and it is an upper bound on verified grounding. A valid citation means the quoted text
+   exists in a retrieved chunk, not that it supports the answer; the dev analysis found valid
+   quotes attached to claims from the model's own knowledge, and on the golden set g016 is
+   such a case (no `copy` chunk retrieved, an irrelevant `itertools#017` quote). The other 14
+   valid golden answers were not individually checked for support.
 3. **The exact-quote verifier is strict.** Of the 35 answerable items without a valid
    citation, 5 failed only because the model swapped quote characters and 8 more differ only
-   in case, spacing or punctuation (by a loose check that may include real misquotes); the
-   verified Docker example failed the same way. A tolerant verifier is the top next step, but
+   in case, spacing or punctuation (by a loose check that may include real misquotes). A
+   tolerant verifier is the top next step, but
    it must be validated on a NEW held-out set, because the golden failures have now been
    inspected and are no longer a clean test of such a change.
 4. **The guard cannot catch on-topic near-misses.** A question about a module that is not in
@@ -322,7 +353,8 @@ In rough order of importance:
 7. **Recorded on Windows, replayed on Linux in CI:** cross-platform replay is unverified until
    the first CI run (the repository has no remote yet).
 8. **A 1B model is insufficient** for this citation format (0 valid citations in every round).
-9. **The Docker path is CPU-only** and was verified once, on one machine, with two questions.
+9. **The Docker path is CPU-only** and was verified once, on one machine, with two questions
+   (golden item g004 and dev item d020, so it re-ran known items rather than adding evidence).
 
 ## Next steps
 
@@ -333,6 +365,10 @@ In rough order of importance:
    cited sentence).
 4. Better abstention for on-topic near-misses, calibrated on the dev set.
 5. The first CI run on Linux, to confirm cross-platform replay.
+6. Supply-chain locking, deliberately deferred: hash-locked requirements
+   (`--require-hashes`) and container base images pinned by digest. The build backend is
+   pinned to an exact `setuptools` version, but that pin is not yet verified by an isolated
+   build.
 
 ## Decisions
 
@@ -358,7 +394,16 @@ In rough order of importance:
   repository; check them before any reuse.
 - **How it was built:** by AI coding agents working in separate roles (developer, tester,
   deployer, manager) under the repository owner's direction, with each commit's changed paths
-  checked against its declared role by `tools/role_paths.py`.
+  checked against its declared role by `tools/role_paths.py`
+  ([`docs/workforce.md`](docs/workforce.md)). Known limits: the `Role:` trailers are
+  self-declared, so the check proves consistency between the declared role and the paths
+  touched, not who did the work; all commits share one git identity; the manager role can edit
+  `workforce/policy.toml`, the policy the check enforces; `workforce/status/handoffs.jsonl` is
+  empty here, because the orchestration record (task ledger, rulings, reviews) lives outside
+  this repository, in the separate `ai-workforce` repository; every commit carries
+  `Co-Authored-By: Claude Sonnet 5.5` as the plan mandated, although some tasks ran on other
+  model tiers; and nothing is enforced on GitHub until a remote with branch protection
+  exists.
 
 ## License
 

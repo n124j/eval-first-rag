@@ -1,10 +1,10 @@
 # ADR 0006: Retrieval-confidence abstention
 
-Status: accepted (default `MIN_DENSE_SCORE` 0.67, calibrated on the dev set only; the
-golden-set effect is UNMEASURED). The golden set has NOT been used for tuning. The default is
-subject to the pre-registered rule in "Decision": both guard-on and guard-off golden results
-will be reported, and the default reverts to 0.0 if the guard raises golden
-`over_refusal_rate` by more than 0.05.
+Status: accepted (default `MIN_DENSE_SCORE` 0.67, calibrated on the dev set only). Amended
+2026-10-20 with the golden result (see "Golden result (2026-10-20)"): the pre-registered rule
+did not fire, so the default stays 0.67, but the golden benefit is one item and the dev-derived
+safety margin did not hold. The golden set was not used for tuning; the threshold was fixed
+before the golden measurement.
 
 ## Context
 
@@ -185,6 +185,37 @@ reported. The shipped default stays 0.67 unless the guard raises golden `over_re
 more than 0.05 compared with guard-off. In that case the default reverts to 0.0 and this ADR is
 amended with the measured result.
 
+## Golden result (2026-10-20)
+
+This is the amendment the pre-registered rule above calls for. Sources:
+`evals/reports/golden-guard-on-metrics.json`, `evals/reports/golden-guard-off-metrics.json`,
+`evals/reports/golden-failure-analysis.md` and `evals/reports/README.md`. The two top dense
+scores below were recomputed for this amendment with a read-only snippet that replays the
+committed embeddings (`evals/recordings/embeddings.npz`) through `retrieve_detailed`, as
+`evals/analysis/failure_taxonomy.py` does; no model and no network were used.
+
+- **Rule outcome.** Golden `over_refusal_rate` is 0.18 with the guard on and 0.18 with it off:
+  difference 0.0000, not more than 0.05. The rule does not fire and the default stays 0.67.
+  `correct_refusal_rate` rose from 0.70 (guard off) to 0.80 (guard on).
+- **The whole golden benefit is one item.** The 0.70 to 0.80 rise is g051 (how to run several
+  asyncio coroutines concurrently), whose top dense score is 0.667983, only 0.0020 below the
+  threshold. The model had answered it in the guard-off run.
+- **The guard also abstained on an answerable item.** g025 (sending log messages to a file),
+  top dense score 0.667614, is below 0.67. This was harmless only because the model had refused
+  g025 in the guard-off run too, so no answerable outcome changed and over-refusal is 0.18
+  either way. The 0.02 safety margin derived on the dev set (threshold at least 0.02 below the
+  lowest answerable dev score) did NOT hold on the golden set: an answerable golden question
+  scored below the threshold itself.
+- **Unanswerable items.** Of the 10 golden unanswerable items, 3 were refused by the guard
+  (g051, g054, g055), 5 were refused by the model (g052, g056, g057, g058, g060) and 2 were
+  answered (g053, g059). g054 and g055 had also been refused by the model in the guard-off run;
+  only g051 changed.
+- **Conclusion.** The benefit is narrow and fragile: one item, decided by a margin of 0.0020,
+  with a threshold calibrated on 20 dev items and pinned by one of them (d012). The guard stays
+  on because the pre-registered rule says so and it cost no answerable outcome on this set, not
+  because it is shown to help in general. A small shift in the embeddings, the chunking or the
+  question wording could move g051 or g025 to the other side of 0.67.
+
 ## Limitations
 
 - 20 dev items (12 answerable, 8 unanswerable), written by one author. One item moves a rate by
@@ -193,9 +224,9 @@ amended with the measured result.
   retrieved.
 - The float16 margin of 0.02 is an assumption sized above the observed drift, not a measured
   bound for every query.
-- The threshold may not transfer to the held-out golden set. Its answerable questions may score
-  below 0.67, which would show up as over-refusal. **The golden-set effect is still UNMEASURED.**
-  Nothing in this ADR is a golden-set claim.
+- The threshold did not fully transfer to the held-out golden set: one answerable golden item,
+  g025, scores below 0.67 (see "Golden result (2026-10-20)"). Apart from that section, nothing
+  in this ADR is a golden-set claim.
 - Near-misses on included modules, and on modules similar to included ones, will score high.
   A cosine guard cannot catch them at any threshold that does not also refuse most answerable
   questions (at 0.75 it catches 6 of 8 but over-refuses 2 of 12; at 0.80 it over-refuses 11).

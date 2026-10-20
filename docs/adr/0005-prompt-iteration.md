@@ -356,7 +356,8 @@ adopted (see Rejected).
   round 2 the k change is harmless to recall on this dev set but still a confound for behaviour.
 - Tuning against the dev set risks overfitting to its phrasing. Choosing a winner among four
   configurations that all score 0.0 by a token-count tie-break carries little information.
-- The result on the golden set is still unmeasured. Nothing in this ADR is a golden-set claim.
+- The result on the golden set is still unmeasured (as of this ADR; the golden result was
+  measured later, see `evals/reports/README.md`). Nothing in this ADR is a golden-set claim.
 - I did not find a dev item that I believe is wrong. The two multi items are limited by
   retrieval (`shutil` and `csv` never reach the top 5), not by the item.
 - **Prompt-format injection.** The question and the retrieved chunk text are untrusted and are
@@ -429,6 +430,9 @@ same dev-set procedure. The golden set was not used.
   8B-0 guard off with `citation_validity_rate >= 0.60` and `over_refusal_rate <= 0.25`.
   Winner: highest guard-off `citation_validity_rate`, ties broken by lower `over_refusal_rate`,
   then higher `correct_refusal_rate`, then lower `prompt_tokens_total`.
+- Labels: "8B" in the round labels 8B-0 to 8B-2 refers to the 7B model
+  `qwen2.5-7b-instruct-1m` (the approval was for a 7B to 8B model class); the label kept for
+  continuity with the recordings of those rounds.
 
 ### Results
 
@@ -541,7 +545,8 @@ recordings (not committed).
 - 20 dev items (12 answerable, 8 unanswerable) from one author. One item moves a rate by 0.083
   or 0.125. The 8B-0 to 8B-2 gain is 3 items, and the cause is directly visible (parse failures
   on identical completions). The 8B-0 to 8B-1 differences are within noise.
-- Dev set only. The golden-set result is still unmeasured, and nothing here is a golden-set
+- Dev set only. The golden-set result is still unmeasured (as of this addendum; see
+  `evals/reports/README.md` for the later golden result), and nothing here is a golden-set
   claim.
 - The served model is the long-context `-1m` variant of Qwen2.5-7B-Instruct at Q4_K_M. Its
   behaviour can differ from the standard 7B instruct release or other quantisations. Each round
