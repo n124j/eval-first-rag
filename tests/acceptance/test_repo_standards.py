@@ -94,3 +94,22 @@ def test_ci_runs_ruff_before_pytest():
     pytest_ = next(i for i, r in enumerate(runs) if "pytest" in r)
     assert ruff < pytest_
     assert CI["permissions"] == {"contents": "read"}
+
+
+# --- final whole-branch review fixes (I5 partial, I7) --------------------------------------
+
+def test_workforce_doc_exists_and_states_its_limits():
+    path = ROOT / "docs" / "workforce.md"
+    assert path.is_file(), "docs/workforce.md is referenced by the agent files but missing"
+    text = path.read_text(encoding="utf-8")
+    for needle in ("self-declared", "ai-workforce", "workforce/policy.toml", "tools.role_paths"):
+        assert needle in text, needle
+    for role in ROLES:
+        assert role in text, role
+
+
+def test_build_backend_requirement_is_pinned_exactly():
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    requires = pyproject["build-system"]["requires"]
+    assert len(requires) == 1
+    assert re.fullmatch(r"setuptools==\d+(\.\d+)*", requires[0]), requires

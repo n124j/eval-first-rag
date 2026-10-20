@@ -111,3 +111,78 @@ def test_links_the_docker_readme(text):
 
 def test_has_a_mermaid_diagram(text):
     assert "```mermaid\n" in text
+
+
+# --- final whole-branch review fixes (C1, I1, I2, I3, I8) ---------------------------------
+
+GOLDEN = ROOT / "evals" / "golden" / "golden.jsonl"
+DEV = ROOT / "evals" / "dev" / "dev.jsonl"
+ADR_0005 = ADR_DIR / "0005-prompt-iteration.md"
+ADR_0006 = ADR_DIR / "0006-retrieval-confidence-abstention.md"
+FENCE = re.compile(r"```[a-z]*\n(.*?)```", re.DOTALL)
+EXAMPLE_QUESTION = re.compile(r'evalrag ask "([^"]+)"|"question": "([^"]+)"')
+
+
+def _set_questions() -> set[str]:
+    questions = set()
+    for path in (GOLDEN, DEV):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                questions.add(json.loads(line)["question"].strip())
+    return questions
+
+
+def test_c1_claims_golden_reproduction_not_every_number(text):
+    assert "golden-set number" in text
+    lowered = text.lower()
+    assert "every published number can be reproduced offline" not in lowered
+    assert "every design change was driven by a measurement" not in lowered
+
+
+@pytest.mark.parametrize("needle", ["measured twice", "g016", "upper bound"])
+def test_readme_states_the_review_qualifiers(text, needle):
+    assert needle in text
+
+
+def test_example_questions_are_neither_golden_nor_dev(text):
+    examples = [
+        a or b
+        for block in FENCE.findall(text)
+        for a, b in EXAMPLE_QUESTION.findall(block)
+    ]
+    assert len(examples) >= 2, f"expected an `evalrag ask` and a `/ask` example: {examples}"
+    held = _set_questions()
+    assert len(held) == 80
+    assert [q for q in examples if q.strip() in held] == []
+
+
+def test_copy2_question_only_appears_as_golden_item_g004(text):
+    sentences = re.split(r"(?<=[.!?])\s+", " ".join(text.split()))
+    hits = [s for s in sentences if "shutil.copy2 differ" in s]
+    assert all("g004" in s for s in hits), hits
+
+
+def test_adr_0006_has_the_golden_result():
+    adr = ADR_0006.read_text(encoding="utf-8")
+    assert "Golden result" in adr
+    flat = " ".join(adr.split()).lower()
+    assert "golden-set effect is unmeasured" not in flat
+    assert "golden-set effect is still unmeasured" not in flat
+    for needle in ("g051", "0.667983", "g025", "0.667614"):
+        assert needle in adr, needle
+
+
+def test_adr_0005_explains_the_8b_labels():
+    adr = " ".join(ADR_0005.read_text(encoding="utf-8").split())
+    assert "label kept for continuity" in adr
+    sentences = re.split(r"(?<=[.!?])\s+", adr)
+    stale = [s for s in sentences if "still unmeasured" in s.lower()]
+    assert stale, "ADR 0005 should keep its dated 'still unmeasured' statements, with a pointer"
+    assert all("evals/reports/README.md" in s for s in stale), stale
+
+
+def test_reports_readme_names_g016_and_does_not_claim_ci_has_run():
+    reports = (ROOT / "evals" / "reports" / "README.md").read_text(encoding="utf-8")
+    for needle in ("g016", "upper bound", "measured twice", "CI has not run yet"):
+        assert needle in reports, needle
+    assert "Both checks run in CI" not in reports

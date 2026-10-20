@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import fnmatch
 import re
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -104,7 +105,7 @@ def test_compose_services():
     services = _compose()["services"]
     assert {"init", "api", "ollama"} <= set(services)
     assert services["api"]["depends_on"]["init"]["condition"] == "service_completed_successfully"
-    assert any(str(p).startswith("8000:8000") for p in services["api"]["ports"])
+    assert any(str(p) == "127.0.0.1:8000:8000" for p in services["api"]["ports"])
     assert services["ollama"]["profiles"] == ["ollama"]
     for name in ("init", "api"):
         assert "profiles" not in services[name]
@@ -259,3 +260,87 @@ def test_env_example_localhost_urls_are_flagged_for_docker():
             assert any("host.docker.internal" in ln for ln in block), (
                 f"{key} is a localhost URL without an adjacent host.docker.internal comment"
             )
+
+
+# --- final whole-branch review fixes (I4, I6) ----------------------------------------------
+
+RECORDING_PATHS = {"evals/recordings/llm.jsonl", "evals/reports/v0-prompt-1b-completions.jsonl"}
+CACHE_KEY = "047b03ba82d86ec7a09dfdc00f03aa2797f489743fc7865b0d55126f26275143"
+FAKE_AWS_KEY = "AKIA" + "ABCDEFGHIJKLMNOP"  # split so the hygiene check does not flag this file
+
+
+def _gitleaks() -> dict:
+    return tomllib.loads((ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))
+
+
+def _gitleaks_allowlists() -> list[dict]:
+    config = _gitleaks()
+    entries = list(config.get("allowlists", []))
+    if "allowlist" in config:
+        entries.append(config["allowlist"])
+    return entries
+
+
+def test_every_published_compose_port_is_bound_to_loopback():
+    published = [
+        (name, str(port))
+        for name, service in _compose()["services"].items()
+        for port in service.get("ports", [])
+    ]
+    assert {name for name, _ in published} >= {"api", "ollama"}
+    assert [p for p in published if not p[1].startswith("127.0.0.1:")] == []
+
+
+def test_docker_readme_security_mentions_the_loopback_binding():
+    text = (ROOT / "docker" / "README.md").read_text(encoding="utf-8")
+    start = text.index("\n## Security\n")
+    end = text.find("\n## ", start + 1)
+    assert "127.0.0.1" in text[start : end if end != -1 else len(text)]
+
+
+def test_gitleaks_keeps_default_rules_and_the_fake_key_allowlist():
+    config = _gitleaks()
+    assert config["extend"]["useDefault"] is True
+    # gitleaks rejects the deprecated [allowlist] table alongside [[allowlists]].
+    assert not ("allowlist" in config and "allowlists" in config)
+    assert any(
+        re.search(rx, FAKE_AWS_KEY)
+        for entry in _gitleaks_allowlists()
+        for rx in entry.get("regexes", [])
+    )
+
+
+def _cache_key_allowlist() -> dict:
+    entries = [e for e in _gitleaks_allowlists() if e.get("paths")]
+    assert len(entries) == 1, "expected exactly one path-scoped allowlist (the cache keys)"
+    return entries[0]
+
+
+def test_gitleaks_cache_key_allowlist_is_scoped_to_the_two_recordings():
+    entry = _cache_key_allowlist()
+    assert entry.get("condition") == "AND", "paths AND regexes must both match"
+    tracked = subprocess.run(
+        ["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True
+    ).stdout.splitlines()
+    matched = {f for f in tracked if any(re.search(p, f) for p in entry["paths"])}
+    assert matched == RECORDING_PATHS
+    assert len(entry["paths"]) == 2
+
+
+def test_gitleaks_cache_key_regex_matches_only_cache_keys():
+    entry = _cache_key_allowlist()
+    assert entry.get("regexTarget", "secret") in {"match", "line"}
+    regexes = entry["regexes"]
+    assert len(regexes) == 1
+    rx = re.compile(regexes[0])
+    line = '{"completion":{"text":"Not found."},"key":"' + CACHE_KEY + '"}'
+    assert rx.search(line)
+    assert rx.search('key":"' + CACHE_KEY + '"')  # the generic-api-key rule's match text
+    for text in (
+        '"api_key": "' + FAKE_AWS_KEY + '"',
+        '"key":"' + FAKE_AWS_KEY + '"',
+        '"key":"' + CACHE_KEY[:-1] + '"',
+        '"key":"' + CACHE_KEY.upper() + '"',
+        '"token":"' + CACHE_KEY + '"',
+    ):
+        assert not rx.search(text), text
