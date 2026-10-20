@@ -158,3 +158,19 @@ def test_interrupted_ingest_leaves_no_valid_marker(tmp_path: Path, corpus: Path,
     assert calls[0] == "ingest.json"
     with pytest.raises(FileNotFoundError, match="no index"):
         open_retriever(settings(), data, HashEmbedder())
+
+
+def test_make_sut_maps_abstained_answer_to_refused_with_zero_cost():
+    abstained = Answer(
+        REFUSAL_TEXT, [], CitationReport(False, [], []), ["a#000"], True, None, abstained=True
+    )
+
+    class P:
+        def ask(self, q):
+            return abstained
+
+    result = make_sut(P())("q")  # type: ignore[arg-type]
+    assert result.refused is True and result.citation_ok is False
+    assert result.answer == REFUSAL_TEXT
+    assert result.retrieved_ids == ["a#000"] and result.cited_ids == []
+    assert (result.latency_s, result.prompt_tokens, result.completion_tokens) == (0.0, 0, 0)

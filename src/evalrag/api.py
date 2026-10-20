@@ -106,7 +106,9 @@ def app_from_env(
         settings, settings.data_dir, embedder, check_same_thread=False
     )
     try:
-        pipeline = RagPipeline(retriever, llm, chunks_by_id, settings.top_k)
+        pipeline = RagPipeline(
+            retriever, llm, chunks_by_id, settings.top_k, min_dense_score=settings.min_dense_score
+        )
         return create_app(pipeline, close=retriever.close)
     except BaseException:
         with contextlib.suppress(Exception):

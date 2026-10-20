@@ -20,7 +20,12 @@ ENV = {
     "EMBED_MODEL": "fake-embed",
     "CHUNK_SIZE": "12",
     "CHUNK_OVERLAP": "2",
+    # HashEmbedder cosines have no semantic scale (all below the calibrated default), so the
+    # fake-based tests disable abstention unless a test is about it.
+    "MIN_DENSE_SCORE": "0",
 }
+# Replay runs need no endpoint settings; they keep abstention disabled like ENV.
+REPLAY_ENV = {"MIN_DENSE_SCORE": "0"}
 
 METRICS = {
     "recall_at_k",
@@ -175,7 +180,7 @@ def test_cli_eval_in_replay_mode_never_opens_a_network_connection(
     args = eval_args(
         tmp_path, corpus, golden, data, "--replay-llm", llm, "--replay-embeddings", emb
     )
-    assert main([str(a) for a in args], env={}) == 0
+    assert main([str(a) for a in args], env=REPLAY_ENV) == 0
     replayed = json.loads((tmp_path / "out" / "metrics.json").read_text(encoding="utf-8"))
     assert replayed == recorded
 
@@ -198,7 +203,7 @@ def test_cli_eval_replay_miss_returns_1_with_message(tmp_path, corpus, golden, c
     )
     capsys.readouterr()
     args = eval_args(tmp_path, corpus, other, data, "--replay-llm", llm, "--replay-embeddings", emb)
-    assert main([str(a) for a in args], env={}) == 1
+    assert main([str(a) for a in args], env=REPLAY_ENV) == 1
     err = capsys.readouterr().err
     assert err.startswith("error: ") and "no recorded" in err
 
@@ -258,12 +263,13 @@ def test_cli_eval_missing_golden_returns_1(tmp_path, corpus, capsys):
 def test_cli_replay_modes_need_no_endpoint_env(tmp_path, corpus, golden):
     data, emb, llm = record_everything(tmp_path, corpus, golden)
     ask = ["ask", "How does the alpha module sort lists?", "--data-dir", str(data)]
-    assert main([*ask, "--replay-llm", str(llm), "--replay-embeddings", str(emb)], env={}) == 0
+    replay = ["--replay-llm", str(llm), "--replay-embeddings", str(emb)]
+    assert main([*ask, *replay], env=REPLAY_ENV) == 0
     args = eval_args(
         tmp_path, corpus, golden, data, "--replay-llm", llm, "--replay-embeddings", emb
     )
     # empty env means the default chunk settings, which do not matter once the index exists
-    assert main([str(a) for a in args], env={}) == 0
+    assert main([str(a) for a in args], env=REPLAY_ENV) == 0
 
 
 def test_refusal_text_is_what_the_fake_uses():
@@ -428,7 +434,7 @@ def test_refresh_outputs_replay_to_identical_metrics(tmp_path, corpus, golden, m
 
     monkeypatch.setattr(socket, "socket", boom)
     monkeypatch.setattr(socket, "getaddrinfo", boom)
-    env = {"CHUNK_SIZE": "12", "CHUNK_OVERLAP": "2"}
+    env = {"CHUNK_SIZE": "12", "CHUNK_OVERLAP": "2", **REPLAY_ENV}
     replay_data = tmp_path / "replay-data"
     ingest = ["ingest", "--corpus", corpus, "--data-dir", replay_data, "--replay-embeddings", emb]
     assert main([str(a) for a in ingest], env=env) == 0
@@ -593,3 +599,143 @@ def test_refresh_k_defaults_to_top_k_setting(tmp_path, corpus, golden):
     assert set(factory.llm_instance.source_counts) == {2}
     report = (tmp_path / "out" / "live.md").read_text(encoding="utf-8")
     assert "| k | 2 |" in report
+
+
+# --- retrieval-confidence abstention (ADR 0006) -------------------------------------------
+# With the HashEmbedder fixture the dense rank-1 cosines are: alpha question 0.483336,
+# beta/gamma question 0.59188, weather question 0.420833. No fake score reaches 1.0.
+
+
+class QuestionRecordingLLM(ScriptedLLM):
+    def __init__(self) -> None:
+        super().__init__()
+        self.questions: list[str] = []
+
+    def complete(self, messages):
+        tail = messages[-1]["content"].rsplit("Question:", 1)[-1]
+        self.questions.append(tail.strip().splitlines()[0])
+        return super().complete(messages)
+
+
+class QuestionRecordingFactory(FakeFactory):
+    def __init__(self) -> None:
+        self.llm_instance = QuestionRecordingLLM()
+
+    def live_llm(self, settings):
+        return self.llm_instance
+
+
+@pytest.mark.parametrize("command", ["ask", "eval", "refresh-recordings"])
+def test_cli_min_dense_score_flag_defaults_to_none(command):
+    required = {
+        "ask": ["q"],
+        "eval": ["--golden", "g", "--report-out", "r", "--metrics-out", "m"],
+        "refresh-recordings": ["--golden", "g", "--embeddings-out", "e", "--llm-out", "l"],
+    }[command]
+    assert _build_parser().parse_args([command, *required]).min_dense_score is None
+
+
+@pytest.mark.parametrize("command", ["ask", "eval", "refresh-recordings"])
+@pytest.mark.parametrize("bad", ["-0.1", "1.1", "nan", "inf", "x"])
+def test_cli_invalid_min_dense_score_exits_2(command, bad, capsys):
+    required = {
+        "ask": ["q"],
+        "eval": ["--golden", "g", "--report-out", "r", "--metrics-out", "m"],
+        "refresh-recordings": ["--golden", "g", "--embeddings-out", "e", "--llm-out", "l"],
+    }[command]
+    with pytest.raises(SystemExit) as exc:
+        _build_parser().parse_args([command, *required, "--min-dense-score", bad])
+    assert exc.value.code == 2
+    assert "--min-dense-score" in capsys.readouterr().err
+
+
+def test_cli_min_dense_score_flag_parses_bounds():
+    parser = _build_parser()
+    assert parser.parse_args(["ask", "q", "--min-dense-score", "0"]).min_dense_score == 0.0
+    assert parser.parse_args(["ask", "q", "--min-dense-score", "1"]).min_dense_score == 1.0
+
+
+@pytest.mark.parametrize(
+    ("env_extra", "argv_extra", "expected_llm_calls"),
+    [
+        ({"MIN_DENSE_SCORE": "1"}, [], 0),  # setting: everything abstains
+        ({"MIN_DENSE_SCORE": "1"}, ["--min-dense-score", "0"], 3),  # flag wins: disabled
+        ({"MIN_DENSE_SCORE": "0"}, ["--min-dense-score", "1"], 0),  # flag wins: abstain
+        ({"MIN_DENSE_SCORE": "0"}, [], 3),  # disabled setting
+    ],
+)
+def test_cli_eval_min_dense_score_flag_overrides_setting(
+    tmp_path, corpus, golden, env_extra, argv_extra, expected_llm_calls
+):
+    data = ingest_live(tmp_path, corpus)
+    factory = QuestionRecordingFactory()
+    args = eval_args(tmp_path, corpus, golden, data, *argv_extra)
+    assert run(args, env={**ENV, **env_extra}, factory=factory) == 0
+    assert len(factory.llm_instance.questions) == expected_llm_calls
+
+
+def test_cli_eval_invalid_min_dense_score_setting_returns_1(tmp_path, corpus, golden, capsys):
+    data = ingest_live(tmp_path, corpus)
+    capsys.readouterr()
+    args = eval_args(tmp_path, corpus, golden, data)
+    assert run(args, env={**ENV, "MIN_DENSE_SCORE": "2"}) == 1
+    assert "MIN_DENSE_SCORE" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("env_extra", "argv_extra"),
+    [({"MIN_DENSE_SCORE": "0.5"}, []), ({}, ["--min-dense-score", "0.5"])],
+)
+def test_cli_ask_abstains_without_llm_call(tmp_path, corpus, capsys, env_extra, argv_extra):
+    data = ingest_live(tmp_path, corpus)
+    capsys.readouterr()
+    factory = QuestionRecordingFactory()
+    question = "How does the alpha module sort lists?"  # dense top 0.483336 < 0.5
+    argv = ["ask", question, "--data-dir", data, *argv_extra]
+    assert run(argv, env={**ENV, **env_extra}, factory=factory) == 0
+    assert factory.llm_instance.questions == []
+    lines = capsys.readouterr().out.splitlines()
+    assert lines == [REFUSAL_TEXT, "refused: true", "citations valid: false"]
+
+
+def test_refresh_min_dense_score_flag_records_no_completion_for_abstained(
+    tmp_path, corpus, golden, capsys
+):
+    factory = QuestionRecordingFactory()
+    args = refresh_args(tmp_path, corpus, golden, tmp_path / "data", "--min-dense-score", "1")
+    assert run(args, factory=factory) == 0
+    assert factory.llm_instance.questions == []
+    assert capsys.readouterr().out.splitlines()[-1].endswith("and 0 completions")
+
+
+def test_cli_eval_abstention_end_to_end_refuses_unanswerable_without_llm(
+    tmp_path, corpus, golden, capsys
+):
+    data = ingest_live(tmp_path, corpus)
+    capsys.readouterr()
+    factory = QuestionRecordingFactory()
+    # 0.45 sits between the weather question (0.420833) and both answerable ones.
+    args = eval_args(tmp_path, corpus, golden, data, "--min-dense-score", "0.45")
+    assert run(args, factory=factory) == 0
+    assert factory.llm_instance.questions == [
+        "How does the alpha module sort lists?",
+        "What do beta and gamma do?",
+    ]
+    metrics = json.loads((tmp_path / "out" / "metrics.json").read_text(encoding="utf-8"))
+    assert metrics["correct_refusal_rate"] == 1.0
+    assert metrics["over_refusal_rate"] == 0.0
+    # Only the two answered items consumed tokens (ScriptedLLM: 10 prompt + 5 completion).
+    assert metrics["prompt_tokens_total"] == 20
+    assert metrics["completion_tokens_total"] == 10
+
+
+def test_cli_eval_threshold_one_over_refuses_everything(tmp_path, corpus, golden):
+    data = ingest_live(tmp_path, corpus)
+    factory = QuestionRecordingFactory()
+    args = eval_args(tmp_path, corpus, golden, data, "--min-dense-score", "1")
+    assert run(args, factory=factory) == 0
+    assert factory.llm_instance.questions == []
+    metrics = json.loads((tmp_path / "out" / "metrics.json").read_text(encoding="utf-8"))
+    assert metrics["correct_refusal_rate"] == 1.0
+    assert metrics["over_refusal_rate"] == 1.0
+    assert metrics["prompt_tokens_total"] == 0 and metrics["completion_tokens_total"] == 0

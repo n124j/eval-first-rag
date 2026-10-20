@@ -6,7 +6,7 @@ import pytest
 
 from evalrag.models import Chunk, Hit
 from evalrag.retrieval.dense import DenseIndex, EmptyIndex
-from evalrag.retrieval.hybrid import HybridRetriever
+from evalrag.retrieval.hybrid import HybridRetriever, RetrievalResult
 from evalrag.retrieval.keyword import KeywordIndex
 from evalrag.retrieval.rerank import (
     CrossEncoderReranker,
@@ -199,3 +199,62 @@ def test_cross_encoder_unavailable_raises_clear_error(monkeypatch):
     monkeypatch.setitem(sys.modules, "sentence_transformers", None)
     with pytest.raises(RerankerUnavailable, match="pip install sentence-transformers"):
         CrossEncoderReranker("m")
+
+
+class ScoredDense:
+    """Dense fake returning explicit (id, cosine) pairs, best first."""
+
+    def __init__(self, scored: list[tuple[str, float]]) -> None:
+        self.scored = scored
+
+    def search(self, vector: np.ndarray, k: int) -> list[Hit]:
+        return [
+            Hit(chunk_id=i, score=s, rank=r) for r, (i, s) in enumerate(self.scored[:k], start=1)
+        ]
+
+
+def test_retrieve_detailed_reports_dense_rank1_score_before_fusion():
+    # Fusion puts "a" first (a = 1/61 + 1/63 > b = 2/62); the reported score is still the
+    # cosine of the dense rank-1 hit "d", rounded to 6 places, not a fused RRF score.
+    dense = ScoredDense([("d", 0.8123456), ("b", 0.7), ("a", 0.6)])
+    r = make(FakeKeyword(["a", "b", "c"]), dense)
+    result = r.retrieve_detailed("q", 10)
+    assert isinstance(result, RetrievalResult)
+    assert result.top_dense_score == 0.812346
+    assert [h.chunk_id for h in result.hits] == ["a", "b", "d", "c"]
+    assert result.hits == r.retrieve("q", 10)
+
+
+def test_retrieve_equals_retrieve_detailed_hits_with_truncation():
+    kw, dn = FakeKeyword(["a", "b", "c"]), FakeDense(["b", "d", "a"])
+    r = make(kw, dn)
+    assert r.retrieve("q", 2) == r.retrieve_detailed("q", 2).hits
+    assert [h.rank for h in r.retrieve_detailed("q", 2).hits] == [1, 2]
+    # FakeDense gives rank 1 the score 1.0 / 1.
+    assert r.retrieve_detailed("q", 2).top_dense_score == 1.0
+
+
+def test_retrieve_detailed_rejects_nonpositive_k():
+    r = make(FakeKeyword(["a"]), FakeDense(["a"]))
+    with pytest.raises(ValueError, match="k must be >= 1"):
+        r.retrieve_detailed("q", 0)
+
+
+def test_retrieval_result_is_frozen():
+    result = RetrievalResult(hits=[], top_dense_score=0.5)
+    with pytest.raises(AttributeError):
+        result.top_dense_score = 0.1  # type: ignore[misc]
+
+
+def test_retrieve_detailed_with_real_dense_index_reports_cosine():
+    dn = DenseIndex()
+    dn.add(["x", "y"], np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32))
+
+    class Emb:
+        def embed(self, texts, kind="document"):
+            return np.array([[3.0, 4.0]], dtype=np.float32)  # cosine 0.6 with x, 0.8 with y
+
+    r = HybridRetriever(FakeKeyword([]), dn, Emb())
+    result = r.retrieve_detailed("q", 1)
+    assert result.top_dense_score == 0.8
+    assert [h.chunk_id for h in result.hits] == ["y"]

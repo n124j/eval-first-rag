@@ -13,7 +13,7 @@ from evalrag.pipeline import Answer
 from evalrag.retrieval.dense import EmptyIndex
 from evalrag.retrieval.embedder import EmbeddingError
 from tests.unit.fakes import make_corpus
-from tests.unit.test_cli import ENV, FakeFactory
+from tests.unit.test_cli import ENV, FakeFactory, QuestionRecordingFactory
 
 QUOTED = 'Cited. [a#000: "quote"]'
 
@@ -224,3 +224,17 @@ def test_openapi_lists_routes_and_schemas():
     assert set(schema["paths"]) == {"/health", "/ask"}
     assert "post" in schema["paths"]["/ask"] and "get" in schema["paths"]["/health"]
     assert {"AskRequest", "AskResponse"} <= set(schema["components"]["schemas"])
+
+
+def test_app_from_env_passes_min_dense_score_and_abstains_without_llm(tmp_path):
+    data = _tiny_index(tmp_path)
+    factory = QuestionRecordingFactory()
+    env = {**ENV, "DATA_DIR": str(data), "MIN_DENSE_SCORE": "1"}
+    app = app_from_env(env=env, factory=factory)
+    with TestClient(app) as client:
+        response = client.post("/ask", json={"question": "How does the alpha module sort lists?"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["refused"] is True and body["answer"] == REFUSAL_TEXT
+    assert body["citations"] == [] and body["retrieved_ids"]
+    assert factory.llm_instance.questions == []

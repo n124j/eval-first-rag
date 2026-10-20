@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from evalrag.config import DEFAULT_TOP_K, ConfigError, Settings
+from evalrag.config import DEFAULT_MIN_DENSE_SCORE, DEFAULT_TOP_K, ConfigError, Settings
 
 REQUIRED = {
     "LLM_BASE_URL": "http://localhost:1/v1",
@@ -91,3 +91,26 @@ def test_settings_require_endpoints_false_defaults_to_empty_strings():
 def test_dataclass_default_top_k_matches_from_env_default():
     direct = Settings(llm_base_url="", llm_model="", embed_base_url="", embed_model="")
     assert direct.top_k == Settings.from_env({}, require_endpoints=False).top_k == DEFAULT_TOP_K
+
+
+def test_min_dense_score_default_from_env_matches_dataclass_default():
+    direct = Settings(llm_base_url="", llm_model="", embed_base_url="", embed_model="")
+    from_env = Settings.from_env({}, require_endpoints=False)
+    assert direct.min_dense_score == from_env.min_dense_score == DEFAULT_MIN_DENSE_SCORE
+
+
+def test_default_min_dense_score_is_the_dev_calibrated_value():
+    # Calibrated on evals/dev/dev.jsonl only (ADR 0006).
+    assert DEFAULT_MIN_DENSE_SCORE == 0.67
+
+
+@pytest.mark.parametrize(("raw", "expected"), [("0", 0.0), ("0.5", 0.5), ("1", 1.0), (" ", None)])
+def test_min_dense_score_from_env(raw, expected):
+    s = Settings.from_env({"MIN_DENSE_SCORE": raw}, require_endpoints=False)
+    assert s.min_dense_score == (DEFAULT_MIN_DENSE_SCORE if expected is None else expected)
+
+
+@pytest.mark.parametrize("raw", ["x", "nan", "inf", "-0.1", "1.1", "-inf"])
+def test_min_dense_score_invalid_names_key(raw):
+    with pytest.raises(ConfigError, match="MIN_DENSE_SCORE"):
+        Settings.from_env({"MIN_DENSE_SCORE": raw}, require_endpoints=False)

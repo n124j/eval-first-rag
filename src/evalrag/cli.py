@@ -3,6 +3,7 @@
 import argparse
 import contextlib
 import json
+import math
 import os
 import sqlite3
 import sys
@@ -11,7 +12,7 @@ from collections.abc import Iterator, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 
-from evalrag.config import ConfigError, Settings
+from evalrag.config import ConfigError, Settings, is_valid_min_dense_score
 from evalrag.corpus import CorpusError, load_corpus
 from evalrag.errors import CacheMismatchError, IndexDataError
 from evalrag.evals.dataset import DatasetError, load_golden
@@ -101,6 +102,30 @@ def _positive_int(text: str) -> int:
     return value
 
 
+def _min_dense_score(text: str) -> float:
+    try:
+        value = float(text)
+    except ValueError:
+        value = math.nan
+    if not is_valid_min_dense_score(value):
+        raise argparse.ArgumentTypeError(f"must be a finite number in [0.0, 1.0], got {text!r}")
+    return value
+
+
+def _add_min_dense_score(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--min-dense-score",
+        type=_min_dense_score,
+        metavar="FLOAT",
+        help="abstention threshold on the dense rank-1 cosine; default: the MIN_DENSE_SCORE "
+        "setting; 0 disables",
+    )
+
+
+def _min_score(args: argparse.Namespace, settings: Settings) -> float:
+    return args.min_dense_score if args.min_dense_score is not None else settings.min_dense_score
+
+
 def _path(value: str | None) -> Path | None:
     return Path(value) if value else None
 
@@ -135,6 +160,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--data-dir")
     _exclusive(p, "--record-llm", "--replay-llm")
     p.add_argument("--replay-embeddings", metavar="PATH")
+    _add_min_dense_score(p)
 
     p = sub.add_parser("eval", help="run the golden set and write metrics and a report")
     p.add_argument("--golden", required=True)
@@ -145,6 +171,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--k", type=_positive_int, help="default: the TOP_K setting")
     _exclusive(p, "--record-llm", "--replay-llm")
     _exclusive(p, "--record-embeddings", "--replay-embeddings")
+    _add_min_dense_score(p)
     p.add_argument("--model")
     p.add_argument("--hardware")
     p.add_argument("--date")
@@ -164,6 +191,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--hardware")
     p.add_argument("--date")
     p.add_argument("--overwrite", action="store_true")
+    _add_min_dense_score(p)
 
     p = sub.add_parser("gate", help="fail when metrics regress past the baseline")
     p.add_argument("--metrics", required=True)
@@ -197,10 +225,15 @@ def _cmd_ingest(args, env, factory) -> int:
 
 
 @contextlib.contextmanager
-def open_pipeline(settings, data_dir, k, embedder, llm) -> Iterator[RagPipeline]:
+def open_pipeline(
+    settings, data_dir, k, embedder, llm, min_dense_score: float | None = None
+) -> Iterator[RagPipeline]:
+    """`min_dense_score` defaults to the setting; pass a value to override it."""
+    if min_dense_score is None:
+        min_dense_score = settings.min_dense_score
     retriever, chunks_by_id = open_retriever(settings, data_dir, embedder)
     try:
-        yield RagPipeline(retriever, llm, chunks_by_id, k)
+        yield RagPipeline(retriever, llm, chunks_by_id, k, min_dense_score=min_dense_score)
     finally:
         retriever.close()
 
@@ -209,7 +242,8 @@ def _cmd_ask(args, env, factory) -> int:
     settings = _settings(env, args.replay_llm, args.replay_embeddings)
     embedder = factory.embedder(settings, None, _path(args.replay_embeddings))
     llm = factory.llm(settings, _path(args.record_llm), _path(args.replay_llm))
-    with open_pipeline(settings, _data_dir(args, settings), settings.top_k, embedder, llm) as p:
+    data_dir, min_score = _data_dir(args, settings), _min_score(args, settings)
+    with open_pipeline(settings, data_dir, settings.top_k, embedder, llm, min_score) as p:
         answer = p.ask(args.question)
     _flush(llm)
     print(answer.text)
@@ -226,7 +260,8 @@ def _eval_step(args, env, settings, embedder, llm) -> None:
     items = load_golden(Path(args.golden), known_sources=known)
     # One k for both the pipeline and the metrics; it defaults to the TOP_K setting.
     k = args.k if args.k is not None else settings.top_k
-    with open_pipeline(settings, _data_dir(args, settings), k, embedder, llm) as pipeline:
+    data_dir, min_score = _data_dir(args, settings), _min_score(args, settings)
+    with open_pipeline(settings, data_dir, k, embedder, llm, min_score) as pipeline:
         result = run_eval(make_sut(pipeline), items, k=k)
     _flush(llm)
     _flush(embedder)
