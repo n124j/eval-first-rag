@@ -21,7 +21,7 @@ Run this first; it must print True for the current project:
 If it prints False, stop, deploy nothing, and report to the manager.
 
 ## Paths you may edit
-`.github/**`, `docker/**`, `Dockerfile*`, `compose*.yaml`, `.gitleaks*`, `workforce/status/handoffs.jsonl`. Touch nothing else.
+`.github/**`, `docker/**`, `Dockerfile*`, `compose*.yaml`, `.dockerignore`, `.gitleaks*`, `workforce/status/handoffs.jsonl`. Touch nothing else.
 
 ## Commits
 Every commit ends with the trailer line `Role: deployer`.
