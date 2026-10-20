@@ -390,8 +390,12 @@ In rough order of importance:
   [`evals/dev/README.md`](evals/dev/README.md).
 - **Recordings:** `evals/recordings/` holds the embeddings and completions from the one live
   golden run of 2026-10-20; regenerate them with `evalrag refresh-recordings` (above).
-- **Models:** served locally through LM Studio. Their licences were not verified for this
-  repository; check them before any reuse.
+- **Models:** served locally through LM Studio; no weights are redistributed here. Licences as
+  stated on the Hugging Face model cards on 2026-10-20: Qwen2.5-7B-Instruct-1M and
+  nomic-embed-text-v1.5 are Apache-2.0; Llama-3.2-1B-Instruct (used only for the documented v0
+  negative result) is under the Llama 3.2 Community License, which adds attribution and
+  acceptable-use terms if you redistribute the model or build on it. Check the cards for the
+  GGUF quantisations you download, and re-check before any reuse.
 - **How it was built:** by AI coding agents working in separate roles (developer, tester,
   deployer, manager) under the repository owner's direction, with each commit's changed paths
   checked against its declared role by `tools/role_paths.py`
