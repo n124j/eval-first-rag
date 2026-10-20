@@ -3,7 +3,7 @@ title = "eval-first-rag gitleaks config"
 [extend]
 useDefault = true
 
-# Uses the [[allowlists]] form (gitleaks 8.21+); the older single [allowlist] table cannot be
+# Uses the [[allowlists]] form (gitleaks 8.25+, pinned in CI via GITLEAKS_VERSION); the older single [allowlist] table cannot be
 # combined with it, so the original fake-key allowlist is kept here as the first entry.
 
 [[allowlists]]
@@ -21,3 +21,10 @@ paths = [
 # Matched against the rule's match text, which for generic-api-key starts at `key` (the
 # leading quote is not part of it); the prefix keeps `api_key":"..."` and similar out.
 regexes = ['''(?:^|[^\w.-])key":"[0-9a-f]{64}"''']
+
+[[allowlists]]
+description = "Pinned sha256 hex literals (request and cache keys) in acceptance tests: digests, not secrets"
+condition = "AND"
+regexTarget = "match"
+paths = ['''^tests/acceptance/.*\.py$''']
+regexes = ['''(?:^|[^0-9a-fA-F])[0-9a-f]{64}(?:[^0-9a-fA-F]|$)''']
