@@ -37,6 +37,13 @@ def extract_pages(
     zip_path: Path, out_dir: Path, modules: Sequence[str], version: str
 ) -> list[dict]:
     out_dir = Path(out_dir)
+    seen: set[str] = set()
+    for module in modules:
+        if not module or "/" in module or "\\" in module or ".." in module:
+            raise ValueError(f"unsafe module name: {module!r}")
+        if module in seen:
+            raise ValueError(f"duplicate module name: {module}")
+        seen.add(module)
     entries: list[dict] = []
     with zipfile.ZipFile(zip_path) as zf:
         names = zf.namelist()
@@ -85,6 +92,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     with tempfile.TemporaryDirectory() as tmp:
         archive = Path(tmp) / "docs.zip"
         with urllib.request.urlopen(args.url, timeout=60) as resp, archive.open("wb") as fh:
+            if not resp.geturl().startswith("https://"):
+                raise ValueError(f"download redirected to non-https URL: {resp.geturl()}")
             while chunk := resp.read(1 << 20):
                 fh.write(chunk)
         data = archive.read_bytes()
