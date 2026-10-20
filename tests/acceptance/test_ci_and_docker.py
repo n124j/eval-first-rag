@@ -311,9 +311,47 @@ def test_gitleaks_keeps_default_rules_and_the_fake_key_allowlist():
 
 
 def _cache_key_allowlist() -> dict:
-    entries = [e for e in _gitleaks_allowlists() if e.get("paths")]
-    assert len(entries) == 1, "expected exactly one path-scoped allowlist (the cache keys)"
+    entries = [
+        e
+        for e in _gitleaks_allowlists()
+        if any(re.search(p, "evals/recordings/llm.jsonl") for p in e.get("paths", []))
+    ]
+    assert len(entries) == 1, "expected exactly one allowlist covering the recordings"
     return entries[0]
+
+
+def _test_literal_allowlist() -> dict:
+    entries = [
+        e
+        for e in _gitleaks_allowlists()
+        if any(re.search(p, "tests/acceptance/test_x.py") for p in e.get("paths", []))
+    ]
+    assert len(entries) == 1, "expected exactly one allowlist covering the acceptance tests"
+    return entries[0]
+
+
+def test_gitleaks_test_literal_allowlist_is_scoped_to_acceptance_tests_and_hex_digests():
+    entry = _test_literal_allowlist()
+    assert entry.get("condition") == "AND"
+    assert entry.get("regexTarget") == "match"
+    assert not any(re.search(p, "src/evalrag/x.py") for p in entry["paths"])
+    assert not any(re.search(p, "tests/unit/test_x.py") for p in entry["paths"])
+    assert not any(re.search(p, "evals/recordings/llm.jsonl") for p in entry["paths"])
+    assert len(entry["regexes"]) == 1
+    rx = re.compile(entry["regexes"][0])
+    assert rx.search('CACHE_KEY = "' + "ab" * 32 + '"')
+    assert rx.search('assert key == "' + "0f" * 32 + '"')
+    assert not rx.search('api_key = "ab12cd34"')
+    assert not rx.search('api_key = "' + "ab" * 31 + '"')  # 62 hex chars: not a sha256 digest
+
+
+def test_gitleaks_action_is_pinned_to_a_version_that_reads_allowlists_tables():
+    secrets = CI["jobs"]["secrets"]
+    step = next(s for s in secrets["steps"] if "gitleaks-action" in s.get("uses", ""))
+    version = str(step.get("env", {}).get("GITLEAKS_VERSION", ""))
+    assert re.fullmatch(r"\d+\.\d+\.\d+", version), "pin GITLEAKS_VERSION to an exact release"
+    # [[allowlists]] needs gitleaks 8.25.0+; the action's default (8.24.3) silently ignores it.
+    assert tuple(int(p) for p in version.split(".")) >= (8, 25, 0)
 
 
 def test_gitleaks_cache_key_allowlist_is_scoped_to_the_two_recordings():
