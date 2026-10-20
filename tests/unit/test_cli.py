@@ -5,10 +5,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from evalrag.cli import ComponentFactory, main
+from evalrag.cli import ComponentFactory, _build_parser, main
 from evalrag.generation.answer import REFUSAL_TEXT
 from evalrag.ingest import load_chunks
 from evalrag.retrieval.dense import DenseIndex
+from evalrag.retrieval.embedder import cache_key
 from tests.unit.fakes import HashEmbedder, ScriptedLLM, make_corpus
 
 ENV = {
@@ -337,3 +338,125 @@ def test_cli_eval_k_must_be_positive(tmp_path, corpus, golden, bad):
     with pytest.raises(SystemExit) as exc:
         run(args)
     assert exc.value.code == 2
+
+
+def refresh_args(tmp_path, corpus, golden, data, *extra):
+    return [
+        "refresh-recordings",
+        "--golden",
+        golden,
+        "--corpus",
+        corpus,
+        "--data-dir",
+        data,
+        "--embeddings-out",
+        tmp_path / "rec" / "emb.npz",
+        "--llm-out",
+        tmp_path / "rec" / "llm.jsonl",
+        "--report-out",
+        tmp_path / "out" / "live.md",
+        "--metrics-out",
+        tmp_path / "out" / "live-metrics.json",
+        "--date",
+        "2026-01-02",
+        *extra,
+    ]
+
+
+def test_refresh_refuses_existing_outputs_without_overwrite(tmp_path, corpus, golden, capsys):
+    (tmp_path / "rec").mkdir()
+    emb, llm = tmp_path / "rec" / "emb.npz", tmp_path / "rec" / "llm.jsonl"
+    data = tmp_path / "d"
+    llm.write_text("keep-llm", encoding="utf-8")
+    capsys.readouterr()
+    assert run(refresh_args(tmp_path, corpus, golden, data)) == 1
+    err = capsys.readouterr().err
+    assert err == f"error: {llm} already exists; pass --overwrite to start a fresh recording\n"
+    assert llm.read_text(encoding="utf-8") == "keep-llm"
+    assert not emb.exists() and not data.exists()
+    # both exist: the embeddings path is named first
+    emb.write_bytes(b"keep-emb")
+    assert run(refresh_args(tmp_path, corpus, golden, data)) == 1
+    assert str(emb) in capsys.readouterr().err
+    assert emb.read_bytes() == b"keep-emb" and llm.read_text(encoding="utf-8") == "keep-llm"
+    assert not data.exists() and not (tmp_path / "out").exists()
+
+
+def test_refresh_overwrite_starts_fresh_and_drops_stale_entries(tmp_path, corpus, golden):
+    data = ingest_live(tmp_path, corpus)
+    llm = tmp_path / "rec" / "llm.jsonl"
+    stale = ["ask", "A stale question outside the golden set", "--data-dir", data]
+    assert run([*stale, "--record-llm", llm]) == 0
+    stale_entry = llm.read_text(encoding="utf-8").splitlines()[1]
+    assert run(refresh_args(tmp_path, corpus, golden, data, "--overwrite")) == 0
+    lines = llm.read_text(encoding="utf-8").splitlines()
+    assert stale_entry not in lines
+    assert len(lines) - 1 == 3  # one completion per golden question
+
+
+def test_refresh_records_documents_and_queries_in_one_embedding_cache(
+    tmp_path, corpus, golden, capsys
+):
+    data = tmp_path / "data"
+    capsys.readouterr()
+    assert run(refresh_args(tmp_path, corpus, golden, data)) == 0
+    out = capsys.readouterr().out.splitlines()
+    chunks = load_chunks(data / "chunks.jsonl")
+    questions = [json.loads(line)["question"] for line in golden.read_text().splitlines()]
+    expected = {cache_key("document", c.text) for c in chunks} | {
+        cache_key("query", q) for q in questions
+    }
+    with np.load(tmp_path / "rec" / "emb.npz") as cache:
+        keys = set(cache["keys"].tolist())
+    assert keys == expected
+    # identical chunk texts share one cache entry (the key is kind + text)
+    assert len(keys) == len({c.text for c in chunks}) + len(set(questions))
+    assert out[0].startswith("ingested 3 documents")
+    assert {line.split(":")[0] for line in out[1:9]} == METRICS
+    assert out[-1] == f"recorded {len(keys)} embeddings and 3 completions"
+
+
+def test_refresh_outputs_replay_to_identical_metrics(tmp_path, corpus, golden, monkeypatch):
+    assert run(refresh_args(tmp_path, corpus, golden, tmp_path / "data")) == 0
+    written = (tmp_path / "out" / "live-metrics.json").read_bytes()
+    emb, llm = tmp_path / "rec" / "emb.npz", tmp_path / "rec" / "llm.jsonl"
+
+    def boom(*args, **kwargs):
+        raise AssertionError("network access attempted")
+
+    monkeypatch.setattr(socket, "socket", boom)
+    monkeypatch.setattr(socket, "getaddrinfo", boom)
+    env = {"CHUNK_SIZE": "12", "CHUNK_OVERLAP": "2"}
+    replay_data = tmp_path / "replay-data"
+    ingest = ["ingest", "--corpus", corpus, "--data-dir", replay_data, "--replay-embeddings", emb]
+    assert main([str(a) for a in ingest], env=env) == 0
+    args = eval_args(
+        tmp_path, corpus, golden, replay_data, "--replay-llm", llm, "--replay-embeddings", emb
+    )
+    assert main([str(a) for a in args], env=env) == 0
+    assert (tmp_path / "out" / "metrics.json").read_bytes() == written
+
+
+def test_refresh_writes_report_and_metrics_to_given_paths(tmp_path, corpus, golden):
+    assert run(refresh_args(tmp_path, corpus, golden, tmp_path / "data")) == 0
+    metrics = json.loads((tmp_path / "out" / "live-metrics.json").read_text(encoding="utf-8"))
+    assert set(metrics) == METRICS
+    report = (tmp_path / "out" / "live.md").read_text(encoding="utf-8")
+    assert report.startswith("# Evaluation report") and "2026-01-02" in report
+
+
+def test_refresh_requires_endpoints_in_env(tmp_path, corpus, golden, capsys):
+    capsys.readouterr()
+    assert run(refresh_args(tmp_path, corpus, golden, tmp_path / "data"), env={}) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("error: ") and "LLM_BASE_URL" in err
+    assert not (tmp_path / "rec").exists()
+
+
+def test_refresh_defaults_for_report_and_metrics_paths():
+    args = _build_parser().parse_args(
+        ["refresh-recordings", "--golden", "g", "--embeddings-out", "e", "--llm-out", "l"]
+    )
+    assert args.report_out == "evals/reports/live.md"
+    assert args.metrics_out == "evals/reports/live-metrics.json"
+    assert args.overwrite is False

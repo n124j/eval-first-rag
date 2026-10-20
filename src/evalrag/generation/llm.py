@@ -187,6 +187,10 @@ class RecordingClient:
     def params(self) -> dict[str, object]:
         return self.inner.params
 
+    @property
+    def entry_count(self) -> int:
+        return len(self._entries)
+
     def complete(self, messages: list[dict[str, str]]) -> Completion:
         key = _key_for(self.params, messages)
         if key not in self._entries:

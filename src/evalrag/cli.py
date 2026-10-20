@@ -1,4 +1,4 @@
-"""Command line: ingest, ask, eval and gate."""
+"""Command line: ingest, ask, eval, refresh-recordings and gate."""
 
 import argparse
 import contextlib
@@ -111,6 +111,10 @@ def _flush(component: object) -> None:
         flush()
 
 
+def _entry_count(component: object) -> int:
+    return int(getattr(component, "entry_count", 0))
+
+
 def _exclusive(parser: argparse.ArgumentParser, record: str, replay: str) -> None:
     group = parser.add_mutually_exclusive_group()
     group.add_argument(record, metavar="PATH")
@@ -145,6 +149,22 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--hardware")
     p.add_argument("--date")
 
+    p = sub.add_parser(
+        "refresh-recordings", help="re-record embeddings and completions against live endpoints"
+    )
+    p.add_argument("--golden", required=True)
+    p.add_argument("--embeddings-out", required=True)
+    p.add_argument("--llm-out", required=True)
+    p.add_argument("--corpus", default="corpus")
+    p.add_argument("--data-dir")
+    p.add_argument("--k", type=_positive_int, default=5)
+    p.add_argument("--report-out", default="evals/reports/live.md")
+    p.add_argument("--metrics-out", default="evals/reports/live-metrics.json")
+    p.add_argument("--model")
+    p.add_argument("--hardware")
+    p.add_argument("--date")
+    p.add_argument("--overwrite", action="store_true")
+
     p = sub.add_parser("gate", help="fail when metrics regress past the baseline")
     p.add_argument("--metrics", required=True)
     p.add_argument("--baseline", required=True)
@@ -160,14 +180,19 @@ def _data_dir(args: argparse.Namespace, settings: Settings) -> Path:
     return Path(args.data_dir) if args.data_dir else settings.data_dir
 
 
+def _ingest_step(args, settings, embedder) -> None:
+    """Build the index and flush the embedder; shared by `ingest` and `refresh-recordings`."""
+    summary = ingest(settings, Path(args.corpus), _data_dir(args, settings), embedder)
+    _flush(embedder)
+    print(f"ingested {summary.documents} documents, {summary.chunks} chunks, dim {summary.dim}")
+
+
 def _cmd_ingest(args, env, factory) -> int:
     settings = _settings(env, args.replay_embeddings)
     embedder = factory.embedder(
         settings, _path(args.record_embeddings), _path(args.replay_embeddings)
     )
-    summary = ingest(settings, Path(args.corpus), _data_dir(args, settings), embedder)
-    _flush(embedder)
-    print(f"ingested {summary.documents} documents, {summary.chunks} chunks, dim {summary.dim}")
+    _ingest_step(args, settings, embedder)
     return 0
 
 
@@ -195,12 +220,8 @@ def _cmd_ask(args, env, factory) -> int:
     return 0
 
 
-def _cmd_eval(args, env, factory) -> int:
-    settings = _settings(env, args.replay_llm, args.replay_embeddings)
-    embedder = factory.embedder(
-        settings, _path(args.record_embeddings), _path(args.replay_embeddings)
-    )
-    llm = factory.llm(settings, _path(args.record_llm), _path(args.replay_llm))
+def _eval_step(args, env, settings, embedder, llm) -> None:
+    """Run the golden set, flush both components, write outputs; shared with refresh."""
     known = {doc.doc_id for doc in load_corpus(Path(args.corpus))}
     items = load_golden(Path(args.golden), known_sources=known)
     with open_pipeline(settings, _data_dir(args, settings), args.k, embedder, llm) as pipeline:
@@ -220,6 +241,38 @@ def _cmd_eval(args, env, factory) -> int:
     report_out.write_text(render_markdown(result, meta), encoding="utf-8", newline="\n")
     for name in METRIC_ORDER:
         print(f"{name}: {result.metrics[name]}")
+
+
+def _cmd_eval(args, env, factory) -> int:
+    settings = _settings(env, args.replay_llm, args.replay_embeddings)
+    embedder = factory.embedder(
+        settings, _path(args.record_embeddings), _path(args.replay_embeddings)
+    )
+    llm = factory.llm(settings, _path(args.record_llm), _path(args.replay_llm))
+    _eval_step(args, env, settings, embedder, llm)
+    return 0
+
+
+def _cmd_refresh(args, env, factory) -> int:
+    emb_out, llm_out = Path(args.embeddings_out), Path(args.llm_out)
+    for path in (emb_out, llm_out):
+        if path.exists() and not args.overwrite:
+            print(
+                f"error: {path} already exists; pass --overwrite to start a fresh recording",
+                file=sys.stderr,
+            )
+            return 1
+    settings = Settings.from_env(env, require_endpoints=True)
+    if args.overwrite:
+        emb_out.unlink(missing_ok=True)
+        llm_out.unlink(missing_ok=True)
+    embedder = factory.embedder(settings, emb_out, None)
+    llm = factory.llm(settings, llm_out, None)
+    _ingest_step(args, settings, embedder)
+    _eval_step(args, env, settings, embedder, llm)
+    print(
+        f"recorded {_entry_count(embedder)} embeddings and {_entry_count(llm)} completions"
+    )
     return 0
 
 
@@ -227,7 +280,13 @@ def _cmd_gate(args, env, factory) -> int:
     return gate(load_metrics(Path(args.metrics)), Path(args.baseline))
 
 
-_COMMANDS = {"ingest": _cmd_ingest, "ask": _cmd_ask, "eval": _cmd_eval, "gate": _cmd_gate}
+_COMMANDS = {
+    "ingest": _cmd_ingest,
+    "ask": _cmd_ask,
+    "eval": _cmd_eval,
+    "refresh-recordings": _cmd_refresh,
+    "gate": _cmd_gate,
+}
 
 
 def main(

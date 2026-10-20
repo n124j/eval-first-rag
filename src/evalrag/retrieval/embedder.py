@@ -118,6 +118,10 @@ class RecordingEmbedder:
             self._vectors = dict(zip(keys, vectors, strict=True))
             self.model = self.model or cached_model
 
+    @property
+    def entry_count(self) -> int:
+        return len(self._vectors)
+
     def embed(self, texts: list[str], kind: Kind = "document") -> np.ndarray:
         if not texts:
             return _empty()
