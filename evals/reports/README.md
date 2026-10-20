@@ -164,9 +164,13 @@ For that reason `v0-prompt-1b-completions.jsonl` lives here and not under
 
 Latency and token rows are not comparable between the columns as measures of model speed: with the guard on, an abstained question makes no LLM call and counts as zero latency and zero tokens (ADR 0006).
 
+### Stop floor
+
+`citation_validity_rate` 0.30 (15 of 50) sits EXACTLY at the pre-agreed stop floor. The rule was: a value below 0.30 stops the run and blocks the baseline; 0.30 continues. One fewer valid answer (14 of 50, 0.28) would have blocked the baseline.
+
 ### Pre-registered rule (ADR 0006)
 
-The guard may stay the default unless it raises golden `over_refusal_rate` by more than 0.05. Guard off: 0.1800. Guard on: 0.1800. Difference: 0.0000. Verdict: the rule does not fire, so the shipped default stays 0.67. The guard changed one outcome: `correct_refusal_rate` rose from 0.7 to 0.8 (g051, an asyncio question that the model had answered, is now refused by the guard). Nothing else changed.
+The guard may stay the default unless it raises golden `over_refusal_rate` by more than 0.05. Guard off: 0.1800. Guard on: 0.1800. Difference: 0.0000. Verdict: the rule does not fire, so the shipped default stays 0.67. The guard changed one outcome: `correct_refusal_rate` rose from 0.7 to 0.8 (g051, an asyncio question that the model had answered, is now refused by the guard). The guard also abstained on one answerable item, g025, which the model had refused in the guard-off run as well, so no answerable item's outcome changed and over-refusal is 0.18 either way (see `golden-failure-analysis.md`).
 
 ### Variance
 
@@ -183,13 +187,19 @@ Zero spread means "no sampling noise on this machine and server build", not "rob
 
 Replaying the guard-off recording offline with `--min-dense-score 0` reproduces `golden-guard-off-metrics.json` (and the guard-off report) byte for byte. Replaying with the default guard reproduces `golden-guard-on-metrics.json`. Both checks run in CI as acceptance tests with the network disabled. `evals/baseline.json` is built from the guard-on row.
 
+### What the CI gate does and does not show
+
+The CI gate replays a FIXED recording. A passing gate shows that the code still reproduces the scores of the recorded responses (retrieval, parsing, citation verification, abstention, metrics). It cannot detect model drift or a change in live quality; those require a new recording.
+
+Gate sensitivity: the `over_refusal_rate` tolerance is 0.10 on a baseline of 0.18, so the gate passes up to 0.28 and fails above it (with 50 answerable items the next attainable value is 0.30). The `citation_validity_rate` tolerance is 0.02 on 0.30, so a one-item drop (0.28) passes and a two-item drop (0.26) fails.
+
 ### What these numbers do and do not show
 
 - The golden set is 60 items written by one author. One answerable item moves a rate by 0.02, one unanswerable item by 0.10. Differences of a few items are not evidence of anything.
 - Retrieval is scored per document (is the right document among the top 3), not per passage, so recall_at_k overstates how precisely the right passage is found.
 - `citation_validity_rate` only checks that each quoted string occurs in a retrieved chunk. A valid citation is not a supported answer: a model can quote a real sentence that does not back its claim. Only 0.30 of answerable questions got a fully valid citation, so most answers are not verifiably grounded by this metric.
 - On the dev set the same model and committed code scored citation_validity_rate 0.6667, over_refusal_rate 0.1667 and correct_refusal_rate 0.6250 (ADR 0005). On the golden set validity is much lower (0.30), over-refusal is similar (0.18) and correct refusal is higher (0.70 without the guard). Dev prompt iteration therefore did not transfer fully to held-out questions, which is what a held-out set is for; with 20 and 60 items the gap is measured but its causes are not.
-- The guard's effect is narrow: it only helps on questions whose best dense similarity is below 0.67. It refused one more unanswerable item (g051) and no answerable item on the golden set. It does not address near-miss questions on topics the corpus covers.
+- The guard's effect is narrow: it only helps on questions whose best dense similarity is below 0.67. It refused one more unanswerable item (g051). It changed no answerable item's outcome: the one answerable item it refused, g025, had also been refused by the model in the guard-off run, so over-refusal is 0.18 either way. It does not address near-miss questions on topics the corpus covers.
 - Results depend on this recording. Re-recording after any change to the prompt, parser, chunking, retrieval, model or threshold can move every number, and requires a new baseline.
 
 A reproducible breakdown of the golden failures (outcome classes of the 50 answerable items, unanswerable items, retrieval versus citation failures) is in `golden-failure-analysis.md`; it is generated offline from the committed recordings by `evals/analysis/failure_taxonomy.py`.

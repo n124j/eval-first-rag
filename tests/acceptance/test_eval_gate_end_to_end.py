@@ -97,6 +97,22 @@ def test_baseline_has_all_nine_metrics_with_expected_directions_and_finite_value
         assert math.isfinite(entry.tolerance), name
 
 
+def test_baseline_tolerances_follow_the_stated_rules():
+    baseline = load_baseline(BASELINE)
+    tol = {name: entry.tolerance for name, entry in baseline.metrics.items()}
+    for name in ("recall_at_k", "mrr", "citation_validity_rate"):
+        assert tol[name] == 0.02, name
+    for name in ("correct_refusal_rate", "over_refusal_rate"):
+        assert tol[name] == 0.10, name
+    for name in ("latency_p50_s", "latency_p95_s"):
+        assert abs(tol[name] - 0.25 * baseline.metrics[name].value) < 0.001, name
+    for name in ("prompt_tokens_total", "completion_tokens_total"):
+        assert abs(tol[name] - 0.05 * baseline.metrics[name].value) < 0.01, name
+    assert baseline.model.strip() and "qwen2.5-7b-instruct-1m" in baseline.model
+    assert baseline.date.strip()
+    assert "re-record" in baseline.reason
+
+
 def test_baseline_matches_committed_guard_on_metrics_file():
     baseline = load_baseline(BASELINE)
     committed = load_metrics(GUARD_ON_METRICS)
@@ -199,17 +215,15 @@ class _CountingFactory(ComponentFactory):
         return Counting()
 
 
-def test_every_golden_question_has_a_recorded_completion_or_is_abstained(tmp_path, monkeypatch):
+def test_every_golden_question_has_a_recorded_completion(tmp_path, monkeypatch):
     _no_network(monkeypatch)
     factory = _CountingFactory()
-    # Guard disabled: every question needs a recorded completion; a ReplayMiss makes main() return 1.
+    # Guard forced off: every question asks for a completion; a ReplayMiss makes main() fail.
     _replay(tmp_path, factory, extra=["--min-dense-score", "0"])
     items = load_golden(GOLDEN, known_sources=_doc_ids())
     recorded = len(LLM.read_text(encoding="utf-8").splitlines()) - 1  # minus the meta header
-    assert len(factory.keys) == len(items)
-    assert recorded >= len(items)
-    # The recording was made with the guard off, so it holds one entry per golden question.
-    assert recorded == len(items)
+    assert len(factory.keys) == len(items) == 60
+    assert recorded == 60
 
 
 def _doc_ids() -> set[str]:

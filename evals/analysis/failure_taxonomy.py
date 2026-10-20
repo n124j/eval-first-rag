@@ -5,6 +5,12 @@ Usage: python evals/analysis/failure_taxonomy.py [--out PATH]
 
 No model, no network, no tuning: the default settings (guard 0.67, k=3, empty env) and the
 recorded embeddings and completions only. Everything printed is computed here.
+
+Caveat on the class "quote not found: differs only in case, spacing or punctuation": it is
+defined by a loose deterministic check (lowercase, remove every non-alphanumeric character,
+then a substring test). It therefore also catches quotes that are not verbatim and may not
+support the claim (g015 is an example). The real cause of each difference (for example markup
+such as backticks or asterisks in the stored chunk text) was NOT individually confirmed.
 """
 from __future__ import annotations
 
@@ -168,6 +174,13 @@ def render(a: dict | None = None) -> str:
         "chunk, case or punctuation only, paraphrase (more than 0.6 of the quote's word tokens "
         "occur in the cited chunk), other."),
         "",
+        ("Caveat: the class \"differs only in case, spacing or punctuation\" is defined by a "
+        "loose deterministic check (lowercase, remove every non-alphanumeric character, then a "
+        "substring test). It therefore also catches quotes that are not verbatim and may not "
+        "support the claim (g015 is an example). The real cause of each difference (for example "
+        "markup such as backticks or asterisks in the stored chunk text) was NOT individually "
+        "confirmed."),
+        "",
         "| Class | Count | Items |",
         "| --- | --- | --- |",
     ]
@@ -241,12 +254,13 @@ def render(a: dict | None = None) -> str:
         ]
 
     valid = len(classes[VALID])
+    invalid = n - valid
+    misses = sum(1 for r in rows.values() if r["class"] != VALID and not r["hit"])
     out += [
         "## (f) What this suggests",
         "",
         (f"Only {valid} of {n} answerable items ended with a valid citation. Most of the rest "
-        "are citation-format or quote-copying failures, not retrieval failures: see the "
-        "retrieval columns in (b). Nothing below was tested; these are readings of the "
+        "are citation or refusal outcomes; see the retrieval columns in (b). Nothing below was tested; these are readings of the "
         "counts, not claims that a fix works."),
         "",
         ("- Classes that look addressable by the system: quote-character swaps and "
@@ -258,13 +272,16 @@ def render(a: dict | None = None) -> str:
         ("- Classes that look like model behaviour: copying a quote word for word from a "
         "small quantised model, refusing answerable questions, and answering unanswerable "
         "ones from memory. A larger model could change them, which is also untested."),
-        ("- Retrieval failures (section (c)) are a separate, smaller group and do not explain "
-        "the citation result."),
+        (f"- Of the {invalid} answerable items without a valid citation, {misses} had no "
+        f"expected source in the top {a['k']}, so retrieval explains at most {misses} of "
+        f"them; the other {invalid - misses} had an expected source retrieved."),
         ("- The dev set (20 items, 12 answerable) gave citation validity 0.67 for the same "
         f"configuration and the golden set gives {valid / n:.2f}. That is not surprising: "
-        "with 12 answerable dev items one item moves the rate by 0.08, the prompt and parser "
-        "were chosen by looking at those items, and the golden items have different wording "
-        "and different documents. The dev result was a development signal, not a prediction."),
+        "with 12 answerable dev items one item moves the rate by 0.08, and the prompt, labels, "
+        "k and parser were tuned on the 20-item dev set (see "
+        "docs/adr/0005-prompt-iteration.md), not on the golden items, so some of the dev "
+        "result reflects fitting to those 20 items. The dev result was a development signal, "
+        "not a prediction."),
         "",
     ]
     return "\n".join(out)
