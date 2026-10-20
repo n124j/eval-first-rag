@@ -395,7 +395,10 @@ def test_parse_citations_is_fast_on_200kb_single_line(unit, expected):
     found = parse_citations(text)
     elapsed = time.perf_counter() - start
     assert len(found) == expected
-    assert elapsed < 1.0, f"parse took {elapsed:.3f} s"
+    # The unbounded quadratic pattern needs well over a minute on this input (3.86 s at 50 KB,
+    # about 20 s at 100 KB, so roughly 60-80 s at 200 KB). A 5 s bound still detects that
+    # regression with a large margin, while leaving CI about 8x headroom over the ~0.6 s here.
+    assert elapsed < 5.0, f"parse took {elapsed:.3f} s"
 
 
 def test_quote_length_is_capped_at_max_quote_chars():
