@@ -3,6 +3,21 @@ title = "eval-first-rag gitleaks config"
 [extend]
 useDefault = true
 
-[allowlist]
+# Uses the [[allowlists]] form (gitleaks 8.21+); the older single [allowlist] table cannot be
+# combined with it, so the original fake-key allowlist is kept here as the first entry.
+
+[[allowlists]]
 description = "Fake AWS key used as a test fixture and in the plan doc"
 regexes = ['''AKIAABCDEFGHIJKLMNOP''']
+
+[[allowlists]]
+description = "Replay-cache keys (sha256 hex digests of the request, not secrets) in the two completion caches"
+condition = "AND"
+regexTarget = "match"
+paths = [
+    '''^evals/recordings/llm\.jsonl$''',
+    '''^evals/reports/v0-prompt-1b-completions\.jsonl$''',
+]
+# Matched against the rule's match text, which for generic-api-key starts at `key` (the
+# leading quote is not part of it); the prefix keeps `api_key":"..."` and similar out.
+regexes = ['''(?:^|[^\w.-])key":"[0-9a-f]{64}"''']

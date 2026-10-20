@@ -52,19 +52,26 @@ models is a large download and runs on CPU here, so answers are slow.
 ## Embedding model caveat
 
 The document vectors were recorded with LM Studio's `nomic-embed-text-v1.5` at Q4_K_M. A different
-embedding model or quantisation (for example Ollama's) gives slightly different vectors. Retrieval
-still works, but the refusal guard threshold (`MIN_DENSE_SCORE`, 0.67) was calibrated on those
-recorded vectors, so scores and refusals may shift a little.
+embedding model or quantisation (for example Ollama's) gives different vectors. Whether retrieval
+still works with Ollama embeddings is UNVERIFIED: the `ollama` profile was never run, and query
+vectors from a different build may not line up with the recorded document vectors. The refusal guard threshold
+(`MIN_DENSE_SCORE`, 0.67) was calibrated on the recorded vectors, so scores and refusals may
+shift.
 
 ## Security
 
-The API has **no authentication** and is for local use only. Do not expose port 8000 to a network
-you do not control.
+The API has **no authentication** and is for local use only. `compose.yaml` therefore publishes
+its ports on the loopback interface only (`"127.0.0.1:8000:8000"` for the API and
+`"127.0.0.1:11434:11434"` for the optional Ollama server), so they are not reachable from other
+machines. Do not change that binding to expose port 8000 or 11434 to a network you do not
+control.
 
 ## First run
 
-The first `docker compose up --build` downloads the base image and installs the dependencies, which
-takes a few minutes. The `init` step then builds the index; later runs reuse the `evalrag-data`
+The first `docker compose up --build` downloads the base image and installs the dependencies. On
+the verified machine build plus start took about 29 s, with a warm base image pull (see
+"Verified"); on another machine, with a cold pull and PyPI downloads, the first run may take a few
+minutes. The `init` step then builds the index; later runs reuse the `evalrag-data`
 volume and the build cache. The first question after startup can be slow while the model server
 loads its model. Run `docker compose down -v` to delete the volumes and start clean.
 
@@ -79,21 +86,25 @@ host (`http://host.docker.internal:1234/v1`, `qwen2.5-7b-instruct-1m`), then `do
 
 Observed:
 
-- Build plus start took about 29 s on the first run (base image pull and PyPI downloads included).
-  The image `eval-first-rag:local` is 326 MB.
+- Build plus start took about 29 s on this machine's first build of the image, with a warm base
+  image pull; a first run elsewhere may take minutes. The image `eval-first-rag:local` is 326 MB.
 - `init` exited 0 and printed `ingested 41 documents, 1289 chunks, dim 768`. The four index files
   (`chunks.jsonl`, `dense.npz`, `ingest.json`, `keyword.sqlite`) were in `/data`, owned by the
   runtime user.
 - `api` ran as uid 10001 (`evalrag`, not root); the container healthcheck reported `healthy` and
   `GET /health` returned `{"status":"ok"}`.
-- `POST /ask` with "How does shutil.copy2 differ from shutil.copy?" returned HTTP 200 in about 4 s
-  with a correct one-sentence answer, one citation (`shutil#006`) and `refused: false`. The model
-  rewrote the double quotes in its quote as single quotes, so `citations_valid` was `false`: the
-  verbatim-quote check is strict. This is model behaviour, not a packaging problem.
-- The off-topic question "Who painted the Mona Lisa?" was abstained by the retrieval-confidence
-  guard (`abstained: true`, `refused: true`, answered in about 0.07 s, i.e. without an LLM call).
+- The smoke test re-ran golden item g004 ("How does shutil.copy2 differ from shutil.copy?") live:
+  HTTP 200 in about 4 s, one citation (`shutil#006`), `refused: false`. It reproduced the recorded
+  outcome: the model quoted with single quotes where the chunk has double quotes, so the verbatim
+  check rejected it (`citations_valid: false`). This confirms that the Docker path reproduces
+  recorded behaviour (same held-out item, same model, temperature 0); it is not new evidence.
+- Dev item d020 ("Who painted the Mona Lisa?", off-topic) was abstained by the
+  retrieval-confidence guard (`abstained: true`, `refused: true`, answered in about 0.07 s, i.e.
+  without an LLM call), as the dev calibration in ADR 0006 predicts.
 - `docker compose down -v` removed the containers, the network and the `evalrag-data` volume.
 
 Limitations: one machine, a Windows host, CPU-only container (no GPU), the model server was the
-host's LM Studio (not part of the stack), and only two questions were asked, so this shows the
-packaging works end to end, not answer quality. The `ollama` profile was not run.
+host's LM Studio (not part of the stack), and only two questions were asked, both items already
+in the golden or dev set, so this shows the packaging works end to end, not answer quality. The
+`ollama` profile was not run. The loopback port binding was added after this run and has only
+been checked statically (`docker compose config`).
