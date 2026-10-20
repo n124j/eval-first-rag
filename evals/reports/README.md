@@ -20,7 +20,7 @@ Measurement conditions:
 - Generation model: `llama-3.2-1b-instruct` (Q8_0), served by LM Studio, temperature 0.
 - Embedding model: `text-embedding-nomic-embed-text-v1.5` (Q4_K_M), served by LM Studio.
 - Hardware: AMD Ryzen 9 3900X, 128 GB RAM, Radeon RX 6600 XT 8 GB (GPU offload setting not recorded).
-- Prompt: v0, the `SYSTEM_PROMPT` as of commit `e79d4fb` (reproduced below).
+- Prompt: v0, the `SYSTEM_PROMPT` as of commit `40590de` (reproduced below).
 - Retrieval: top `k=5` chunks. Golden set: 60 items (40 single-document, 10 multi-document, 10 unanswerable).
 
 ### Metrics
@@ -107,7 +107,7 @@ unrelated chunk header, then answers from outside knowledge.
 
 ### The v0 system prompt
 
-This is the resolved text of `SYSTEM_PROMPT` at commit `e79d4fb` (with `MIN_QUOTE_CHARS`
+This is the resolved text of `SYSTEM_PROMPT` at commit `40590de` (with `MIN_QUOTE_CHARS`
 = 8 and the refusal text filled in). Each line break below is a single newline character,
 exactly as in the source; the sentences within a line are separated by single spaces.
 
