@@ -20,8 +20,38 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -r requirements.txt -r requirements-dev.txt
+      - run: python -m pip install -e . --no-deps
       - run: python -m ruff check .
       - run: python -m pytest -q
+      - name: Ingest the corpus from recorded embeddings
+        run: >-
+          python -m evalrag ingest --corpus corpus
+          --replay-embeddings evals/recordings/embeddings.npz
+          --data-dir "${{ runner.temp }}/evalrag-data"
+      - name: Replay the golden set from recorded responses
+        run: >-
+          python -m evalrag eval --golden evals/golden/golden.jsonl --corpus corpus
+          --data-dir "${{ runner.temp }}/evalrag-data"
+          --replay-llm evals/recordings/llm.jsonl
+          --replay-embeddings evals/recordings/embeddings.npz
+          --report-out "${{ runner.temp }}/ci-report.md"
+          --metrics-out "${{ runner.temp }}/ci-metrics.json"
+          --model qwen2.5-7b-instruct-1m
+          --hardware "replayed from recordings in CI"
+          --date 2026-10-20
+      - name: Gate the metrics against the baseline
+        run: >-
+          python -m evalrag gate --metrics "${{ runner.temp }}/ci-metrics.json"
+          --baseline evals/baseline.json
+      - name: Upload the eval report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: eval-report
+          path: |
+            ${{ runner.temp }}/ci-report.md
+            ${{ runner.temp }}/ci-metrics.json
+          retention-days: 14
       - run: python -m tools.hygiene
       - run: python -m tools.role_paths --base ${{ github.event.pull_request.base.sha || github.event.before }} --head ${{ github.sha }}
 

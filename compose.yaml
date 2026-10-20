@@ -1,0 +1,68 @@
+# Default stack: one-shot index build, then the API. The model server is NOT included:
+# point LLM_BASE_URL / EMBED_BASE_URL at the host (LM Studio) or use the "ollama" profile.
+x-evalrag-image: &evalrag-image
+  image: eval-first-rag:local
+  build: .
+
+services:
+  init:
+    <<: *evalrag-image
+    command:
+      - python
+      - -m
+      - evalrag
+      - ingest
+      - --corpus
+      - corpus
+      - --replay-embeddings
+      - evals/recordings/embeddings.npz
+      - --data-dir
+      - /data
+    environment:
+      EMBED_MODEL: ${EMBED_MODEL:-text-embedding-nomic-embed-text-v1.5}
+    volumes:
+      - evalrag-data:/data
+    restart: "no"
+
+  api:
+    <<: *evalrag-image
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:1234/v1}
+      EMBED_BASE_URL: ${EMBED_BASE_URL:-http://host.docker.internal:1234/v1}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5-7b-instruct-1m}
+      EMBED_MODEL: ${EMBED_MODEL:-text-embedding-nomic-embed-text-v1.5}
+      DATA_DIR: /data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - evalrag-data:/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  ollama:
+    image: ollama/ollama:0.40.6
+    profiles: ["ollama"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+
+volumes:
+  evalrag-data:
+  ollama-models:
