@@ -1,0 +1,330 @@
+[
+  {
+    "doc_id": "argparse",
+    "title": "\"argparse\" --- Parser for command-line options, arguments and subcommands",
+    "url": "https://docs.python.org/3.12/library/argparse.html",
+    "version": "3.12",
+    "file": "argparse.txt",
+    "sha256": "cd6a3cc664d09fa33521a6900cfa4ffd79f185afd0a4ff48962cd9cf14789424"
+  },
+  {
+    "doc_id": "bisect",
+    "title": "\"bisect\" --- Array bisection algorithm",
+    "url": "https://docs.python.org/3.12/library/bisect.html",
+    "version": "3.12",
+    "file": "bisect.txt",
+    "sha256": "f4ea36472a9ab3b76c733870d1157fe1da4e837e1d2bb030fa3deb9f79a31f40"
+  },
+  {
+    "doc_id": "calendar",
+    "title": "\"calendar\" --- General calendar-related functions",
+    "url": "https://docs.python.org/3.12/library/calendar.html",
+    "version": "3.12",
+    "file": "calendar.txt",
+    "sha256": "5a96d172dced48fcb199a6423543709733086cd049a15fd8ca93070531d0ef42"
+  },
+  {
+    "doc_id": "collections",
+    "title": "\"collections\" --- Container datatypes",
+    "url": "https://docs.python.org/3.12/library/collections.html",
+    "version": "3.12",
+    "file": "collections.txt",
+    "sha256": "a10d0339cf3703abb3718231924db6ce0c504350975fbe50350be803762b3ad1"
+  },
+  {
+    "doc_id": "contextlib",
+    "title": "\"contextlib\" --- Utilities for \"with\"-statement contexts",
+    "url": "https://docs.python.org/3.12/library/contextlib.html",
+    "version": "3.12",
+    "file": "contextlib.txt",
+    "sha256": "35805852349ebb634bb5af30fb1247bc168dd7e6da71fbd405518f157f40c687"
+  },
+  {
+    "doc_id": "copy",
+    "title": "\"copy\" --- Shallow and deep copy operations",
+    "url": "https://docs.python.org/3.12/library/copy.html",
+    "version": "3.12",
+    "file": "copy.txt",
+    "sha256": "d5688fb275425684604b0776948ed19dc169775681a6d32d7e1c159c20aa987b"
+  },
+  {
+    "doc_id": "csv",
+    "title": "\"csv\" --- CSV File Reading and Writing",
+    "url": "https://docs.python.org/3.12/library/csv.html",
+    "version": "3.12",
+    "file": "csv.txt",
+    "sha256": "470c6dfd2c484fe18be54bfbf7443841ce6124a235614ee6ad52e71e1a77595e"
+  },
+  {
+    "doc_id": "dataclasses",
+    "title": "\"dataclasses\" --- Data Classes",
+    "url": "https://docs.python.org/3.12/library/dataclasses.html",
+    "version": "3.12",
+    "file": "dataclasses.txt",
+    "sha256": "64b02323516eb88bdadbfb5b7010fc20c5c3d361aeac172daac5ebd0f0b0193f"
+  },
+  {
+    "doc_id": "datetime",
+    "title": "\"datetime\" --- Basic date and time types",
+    "url": "https://docs.python.org/3.12/library/datetime.html",
+    "version": "3.12",
+    "file": "datetime.txt",
+    "sha256": "c380adc8a7e38ba2c67e4082d98ed036d5a4cb05d8b0c70da0785e9531b19ddf"
+  },
+  {
+    "doc_id": "decimal",
+    "title": "\"decimal\" --- Decimal fixed-point and floating-point arithmetic",
+    "url": "https://docs.python.org/3.12/library/decimal.html",
+    "version": "3.12",
+    "file": "decimal.txt",
+    "sha256": "ebf8178088fd2210eb5fe41111541f687fe04e679dfb466bd5bdc1f433f4f83f"
+  },
+  {
+    "doc_id": "enum",
+    "title": "\"enum\" --- Support for enumerations",
+    "url": "https://docs.python.org/3.12/library/enum.html",
+    "version": "3.12",
+    "file": "enum.txt",
+    "sha256": "de3ac126ad397878265d14b98e7bac5d92478b7550fe6efef633062719c5fede"
+  },
+  {
+    "doc_id": "fractions",
+    "title": "\"fractions\" --- Rational numbers",
+    "url": "https://docs.python.org/3.12/library/fractions.html",
+    "version": "3.12",
+    "file": "fractions.txt",
+    "sha256": "c12abd12d85415d3b2b4baea9440f216327f36191686aeeaba0c844cd2a001d4"
+  },
+  {
+    "doc_id": "functools",
+    "title": "\"functools\" --- Higher-order functions and operations on callable objects",
+    "url": "https://docs.python.org/3.12/library/functools.html",
+    "version": "3.12",
+    "file": "functools.txt",
+    "sha256": "d0285afd74132b78d08a003feedefbffe12da0e17fa42fdbbe60679fcd4e1b48"
+  },
+  {
+    "doc_id": "glob",
+    "title": "\"glob\" --- Unix style pathname pattern expansion",
+    "url": "https://docs.python.org/3.12/library/glob.html",
+    "version": "3.12",
+    "file": "glob.txt",
+    "sha256": "3287a6aef365a0b1bced92d0299c61729aca029a4f424b4cd4602d01913115b5"
+  },
+  {
+    "doc_id": "hashlib",
+    "title": "\"hashlib\" --- Secure hashes and message digests",
+    "url": "https://docs.python.org/3.12/library/hashlib.html",
+    "version": "3.12",
+    "file": "hashlib.txt",
+    "sha256": "c5c2a6fbe7a5d8e2fb609eb2b126d005c1be739618e6952a5969c3a11fe6f780"
+  },
+  {
+    "doc_id": "heapq",
+    "title": "\"heapq\" --- Heap queue algorithm",
+    "url": "https://docs.python.org/3.12/library/heapq.html",
+    "version": "3.12",
+    "file": "heapq.txt",
+    "sha256": "632622ccac844f45d7ea9dd4a5d813cf27b3cd89aa4adef6a62cd87df677b74a"
+  },
+  {
+    "doc_id": "itertools",
+    "title": "\"itertools\" --- Functions creating iterators for efficient looping",
+    "url": "https://docs.python.org/3.12/library/itertools.html",
+    "version": "3.12",
+    "file": "itertools.txt",
+    "sha256": "4dd9f153f97389a29566741fb4a218e329564cc24d06e452a901ca585b51bc40"
+  },
+  {
+    "doc_id": "json",
+    "title": "\"json\" --- JSON encoder and decoder",
+    "url": "https://docs.python.org/3.12/library/json.html",
+    "version": "3.12",
+    "file": "json.txt",
+    "sha256": "d413b4168aca33ee113ac4948873920ff6f9788d1609c21b22d27c8ac4efbc85"
+  },
+  {
+    "doc_id": "logging",
+    "title": "\"logging\" --- Logging facility for Python",
+    "url": "https://docs.python.org/3.12/library/logging.html",
+    "version": "3.12",
+    "file": "logging.txt",
+    "sha256": "a82dc9ea5742d418844b8c8265caca65c645238ab70f9e5feb8a0f666dedf691"
+  },
+  {
+    "doc_id": "math",
+    "title": "\"math\" --- Mathematical functions",
+    "url": "https://docs.python.org/3.12/library/math.html",
+    "version": "3.12",
+    "file": "math.txt",
+    "sha256": "f9ca33de7d7f3c32c1246dc47f7f1c40578ab82e1d3d26dd37da5626d848e32b"
+  },
+  {
+    "doc_id": "operator",
+    "title": "\"operator\" --- Standard operators as functions",
+    "url": "https://docs.python.org/3.12/library/operator.html",
+    "version": "3.12",
+    "file": "operator.txt",
+    "sha256": "66ff9b7b79d8586b31a936a6211ce69f89165a842104c227f268e34fb48f5e71"
+  },
+  {
+    "doc_id": "os.path",
+    "title": "\"os.path\" --- Common pathname manipulations",
+    "url": "https://docs.python.org/3.12/library/os.path.html",
+    "version": "3.12",
+    "file": "os.path.txt",
+    "sha256": "5c6f5ae78d390692738d0fc756e73949fe65080d86d77bcf3e90c06dd3be5d80"
+  },
+  {
+    "doc_id": "pathlib",
+    "title": "\"pathlib\" --- Object-oriented filesystem paths",
+    "url": "https://docs.python.org/3.12/library/pathlib.html",
+    "version": "3.12",
+    "file": "pathlib.txt",
+    "sha256": "7c6cb8fe2c9ffca0bff23ec27f3b550e28eb9465e12117cd02a771fbda3a48f8"
+  },
+  {
+    "doc_id": "pickle",
+    "title": "\"pickle\" --- Python object serialization",
+    "url": "https://docs.python.org/3.12/library/pickle.html",
+    "version": "3.12",
+    "file": "pickle.txt",
+    "sha256": "09a718802ab201eaec0a680bbf0e6ca3d4d21d93cc0ba3a0ac24e96474cbdb9b"
+  },
+  {
+    "doc_id": "random",
+    "title": "\"random\" --- Generate pseudo-random numbers",
+    "url": "https://docs.python.org/3.12/library/random.html",
+    "version": "3.12",
+    "file": "random.txt",
+    "sha256": "ec52841e3396b7adcb6a4c737463cb5a816c238efa1c0bd34c70d9cfe6004e59"
+  },
+  {
+    "doc_id": "re",
+    "title": "\"re\" --- Regular expression operations",
+    "url": "https://docs.python.org/3.12/library/re.html",
+    "version": "3.12",
+    "file": "re.txt",
+    "sha256": "db081357ab7a257424a60a2655c315a52867e63976d0c3f1dabda90e0e43a249"
+  },
+  {
+    "doc_id": "secrets",
+    "title": "\"secrets\" --- Generate secure random numbers for managing secrets",
+    "url": "https://docs.python.org/3.12/library/secrets.html",
+    "version": "3.12",
+    "file": "secrets.txt",
+    "sha256": "f2ebee302ce106e92ead6fcf4acdf2d46062444c047f636839a74f874e6a7ef5"
+  },
+  {
+    "doc_id": "shutil",
+    "title": "\"shutil\" --- High-level file operations",
+    "url": "https://docs.python.org/3.12/library/shutil.html",
+    "version": "3.12",
+    "file": "shutil.txt",
+    "sha256": "0cd044311bfbddf2b0218741e7bc74645bcf7c7b713d293c2a227b6c2e35c2e5"
+  },
+  {
+    "doc_id": "sqlite3",
+    "title": "\"sqlite3\" --- DB-API 2.0 interface for SQLite databases",
+    "url": "https://docs.python.org/3.12/library/sqlite3.html",
+    "version": "3.12",
+    "file": "sqlite3.txt",
+    "sha256": "6cfcd81e6b64457759e7996779b6de16dc3f2ca38d5c891f35f33c64b3708d5f"
+  },
+  {
+    "doc_id": "statistics",
+    "title": "\"statistics\" --- Mathematical statistics functions",
+    "url": "https://docs.python.org/3.12/library/statistics.html",
+    "version": "3.12",
+    "file": "statistics.txt",
+    "sha256": "f7f8205a91cc34853f32e9766a3b40e7438d64418351fdb67c9e17ed31bd48a7"
+  },
+  {
+    "doc_id": "string",
+    "title": "\"string\" --- Common string operations",
+    "url": "https://docs.python.org/3.12/library/string.html",
+    "version": "3.12",
+    "file": "string.txt",
+    "sha256": "42b509eb48b2725c4c3b7c34ae0b5435c5f1e63c4e90106bf29aa1b3741f5b6c"
+  },
+  {
+    "doc_id": "subprocess",
+    "title": "\"subprocess\" --- Subprocess management",
+    "url": "https://docs.python.org/3.12/library/subprocess.html",
+    "version": "3.12",
+    "file": "subprocess.txt",
+    "sha256": "165f2bee0e2d9536eff6901c1b7824e3490a0997ff39702460150cf50cfa279b"
+  },
+  {
+    "doc_id": "tempfile",
+    "title": "\"tempfile\" --- Generate temporary files and directories",
+    "url": "https://docs.python.org/3.12/library/tempfile.html",
+    "version": "3.12",
+    "file": "tempfile.txt",
+    "sha256": "e38b78dbba5e7ca0cdc1286b7b67cab172dcae098fb6d1d2a680989d0c33bb7f"
+  },
+  {
+    "doc_id": "textwrap",
+    "title": "\"textwrap\" --- Text wrapping and filling",
+    "url": "https://docs.python.org/3.12/library/textwrap.html",
+    "version": "3.12",
+    "file": "textwrap.txt",
+    "sha256": "3638bf9e771766d42cb0d152b69f4e7a4af2eb155da78464145c0c6427848e14"
+  },
+  {
+    "doc_id": "threading",
+    "title": "\"threading\" --- Thread-based parallelism",
+    "url": "https://docs.python.org/3.12/library/threading.html",
+    "version": "3.12",
+    "file": "threading.txt",
+    "sha256": "5378fb0d2e794e60d81532d1733770899b318a891db69a0568ec9621b90ac684"
+  },
+  {
+    "doc_id": "time",
+    "title": "\"time\" --- Time access and conversions",
+    "url": "https://docs.python.org/3.12/library/time.html",
+    "version": "3.12",
+    "file": "time.txt",
+    "sha256": "0a3088a21370301d86369f6f70f4153354a256eb128309348bf69d69a0dcf535"
+  },
+  {
+    "doc_id": "typing",
+    "title": "\"typing\" --- Support for type hints",
+    "url": "https://docs.python.org/3.12/library/typing.html",
+    "version": "3.12",
+    "file": "typing.txt",
+    "sha256": "53e229ac8fd443acaa01785ffb1c932bc79c826d6aeb3428f5aef0907bdafc6c"
+  },
+  {
+    "doc_id": "unittest",
+    "title": "\"unittest\" --- Unit testing framework",
+    "url": "https://docs.python.org/3.12/library/unittest.html",
+    "version": "3.12",
+    "file": "unittest.txt",
+    "sha256": "aa60a8b1d4a885dc5848697b617cd9ad58a69ec67b7792d1da4641be284f837f"
+  },
+  {
+    "doc_id": "urllib.parse",
+    "title": "\"urllib.parse\" --- Parse URLs into components",
+    "url": "https://docs.python.org/3.12/library/urllib.parse.html",
+    "version": "3.12",
+    "file": "urllib.parse.txt",
+    "sha256": "c5bde21a52f0e3d590bd26017e2ed29b31b92895e8c44b7a10c6552d77f8e6e9"
+  },
+  {
+    "doc_id": "uuid",
+    "title": "\"uuid\" --- UUID objects according to **RFC 4122**",
+    "url": "https://docs.python.org/3.12/library/uuid.html",
+    "version": "3.12",
+    "file": "uuid.txt",
+    "sha256": "13ceb899e34709771eaf1f6ddd48515910fef09e9b05a02b7da712bc62b81f45"
+  },
+  {
+    "doc_id": "zipfile",
+    "title": "\"zipfile\" --- Work with ZIP archives",
+    "url": "https://docs.python.org/3.12/library/zipfile.html",
+    "version": "3.12",
+    "file": "zipfile.txt",
+    "sha256": "59f5ddacf9b4f41d42fb7f1f2f049c16287fbac53a4b0c1089c7e22d4424a738"
+  }
+]
