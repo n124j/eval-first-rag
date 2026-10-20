@@ -128,3 +128,33 @@ def test_make_sut_maps_answer_fields():
     r2 = make_sut(Q())("q")  # type: ignore[arg-type]
     assert (r2.latency_s, r2.prompt_tokens, r2.completion_tokens) == (0.0, 0, 0)
     assert r2.refused and not r2.citation_ok
+
+
+def test_open_retriever_missing_file_names_it_even_with_marker(tmp_path: Path, corpus: Path):
+    data = tmp_path / "data"
+    ingest(settings(), corpus, data, HashEmbedder())
+    (data / "dense.npz").unlink()
+    with pytest.raises(FileNotFoundError, match="dense.npz") as exc:
+        open_retriever(settings(), data, HashEmbedder())
+    assert 'run "evalrag ingest" first' in str(exc.value)
+
+
+def test_interrupted_ingest_leaves_no_valid_marker(tmp_path: Path, corpus: Path, monkeypatch):
+    data = tmp_path / "data"
+    ingest(settings(), corpus, data, HashEmbedder())
+    real = Path.unlink
+    calls: list[str] = []
+
+    def flaky(self, *args, **kwargs):
+        calls.append(self.name)
+        if len(calls) == 2:
+            raise PermissionError("locked")
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", flaky)
+    with pytest.raises(PermissionError):
+        ingest(settings(), corpus, data, HashEmbedder())
+    monkeypatch.undo()
+    assert calls[0] == "ingest.json"
+    with pytest.raises(FileNotFoundError, match="no index"):
+        open_retriever(settings(), data, HashEmbedder())

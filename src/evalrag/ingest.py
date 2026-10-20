@@ -11,6 +11,7 @@ import numpy as np
 from evalrag.chunking import chunk_document
 from evalrag.config import Settings
 from evalrag.corpus import load_corpus
+from evalrag.errors import IndexDataError
 from evalrag.models import Chunk
 from evalrag.retrieval.dense import DenseIndex
 from evalrag.retrieval.embedder import Embedder
@@ -67,7 +68,7 @@ def ingest(
 
     data_dir = Path(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
-    for name in (KEYWORD_FILE, DENSE_FILE, CHUNKS_FILE, META_FILE):
+    for name in (META_FILE, KEYWORD_FILE, DENSE_FILE, CHUNKS_FILE):
         (data_dir / name).unlink(missing_ok=True)
 
     keyword = KeywordIndex(data_dir / KEYWORD_FILE)
@@ -131,7 +132,7 @@ def load_chunks(path: Path) -> list[Chunk]:
                     )
                 )
             except (ValueError, TypeError) as exc:
-                raise ValueError(f"{path}: line {lineno}: malformed chunk: {exc}") from exc
+                raise IndexDataError(f"{path}: line {lineno}: malformed chunk: {exc}") from exc
     return chunks
 
 
@@ -145,8 +146,16 @@ def open_retriever(
     data_dir = Path(data_dir)
     if not (data_dir / META_FILE).exists():
         raise FileNotFoundError(f'no index in {data_dir}; run "evalrag ingest" first')
+    for name in (KEYWORD_FILE, DENSE_FILE, CHUNKS_FILE):
+        if not (data_dir / name).exists():
+            raise FileNotFoundError(
+                f'index file {name} is missing in {data_dir}; run "evalrag ingest" first'
+            )
     chunks = load_chunks(data_dir / CHUNKS_FILE)
-    dense = DenseIndex.load(data_dir / DENSE_FILE)
+    try:
+        dense = DenseIndex.load(data_dir / DENSE_FILE)
+    except (ValueError, EOFError) as exc:
+        raise IndexDataError(f"{data_dir / DENSE_FILE}: corrupt dense index: {exc}") from exc
     keyword = KeywordIndex(data_dir / KEYWORD_FILE, check_same_thread=check_same_thread)
     retriever = HybridRetriever(keyword, dense, embedder, candidate_k=CANDIDATE_K)
     return retriever, {c.chunk_id: c for c in chunks}

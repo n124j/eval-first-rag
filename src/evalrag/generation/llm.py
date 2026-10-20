@@ -18,6 +18,7 @@ from typing import IO, Protocol
 
 import httpx
 
+from evalrag.errors import CacheMismatchError
 from evalrag.retrieval.embedder import ReplayMiss
 
 
@@ -177,7 +178,7 @@ class RecordingClient:
                 differing = sorted(
                     k for k in meta.keys() | inner.params.keys() if meta.get(k) != inner.params.get(k)
                 )
-                raise ValueError(
+                raise CacheMismatchError(
                     f"{self.cache_path}: cache was recorded with different parameters "
                     f"(differing keys: {', '.join(differing)})"
                 )

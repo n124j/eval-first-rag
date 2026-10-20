@@ -50,3 +50,7 @@ class HybridRetriever:
             Hit(chunk_id=h.chunk_id, score=round(h.score, 6), rank=rank)
             for rank, h in enumerate(hits[:k], start=1)
         ]
+
+    def close(self) -> None:
+        """Close the keyword index; safe to call more than once."""
+        self._keyword.close()

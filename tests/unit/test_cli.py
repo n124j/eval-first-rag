@@ -113,7 +113,7 @@ def test_cli_ingest_record_then_replay_gives_identical_index_files(tmp_path, cor
     ia, ib = DenseIndex.load(a / "dense.npz"), DenseIndex.load(b / "dense.npz")
     probe = HashEmbedder().embed(["alpha module"], kind="query")[0]
     assert ia.search(probe, 5) == ib.search(probe, 5)
-    assert np.allclose(ia._matrix, ib._matrix, atol=1e-2)
+    assert np.array_equal(ia._matrix, ib._matrix)
 
 
 def eval_args(tmp_path, corpus, golden, data, *extra):
@@ -267,3 +267,73 @@ def test_refusal_text_is_what_the_fake_uses():
     assert ScriptedLLM().complete(
         [{"role": "user", "content": "[a#000]\nx\n\nQuestion: unanswerable?"}]
     ).text == REFUSAL_TEXT
+
+
+def test_cli_ask_record_llm_with_different_params_returns_1(tmp_path, corpus, capsys):
+    data = ingest_live(tmp_path, corpus)
+    cache = tmp_path / "llm.jsonl"
+    q = ["ask", "How does the alpha module sort lists?", "--data-dir", data, "--record-llm", cache]
+    assert run(q) == 0
+
+    class Other(FakeFactory):
+        def live_llm(self, settings):
+            llm = ScriptedLLM()
+            llm.params = {**llm.params, "temperature": 0.9}
+            return llm
+
+    capsys.readouterr()
+    assert run(q, factory=Other()) == 1
+    assert capsys.readouterr().err.startswith("error: ")
+
+
+def test_cli_malformed_chunks_line_returns_1_naming_line(tmp_path, corpus, capsys):
+    data = ingest_live(tmp_path, corpus)
+    path = data / "chunks.jsonl"
+    path.write_text(path.read_text(encoding="utf-8") + "{broken\n", encoding="utf-8")
+    n = len(path.read_text(encoding="utf-8").splitlines())
+    capsys.readouterr()
+    assert run(["ask", "alpha?", "--data-dir", data]) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("error: ") and f"line {n}" in err
+
+
+def test_cli_corrupt_dense_index_returns_1(tmp_path, corpus, capsys):
+    data = ingest_live(tmp_path, corpus)
+    (data / "dense.npz").write_bytes(b"garbage")
+    capsys.readouterr()
+    assert run(["ask", "alpha?", "--data-dir", data]) == 1
+    assert capsys.readouterr().err.startswith("error: ")
+
+
+def test_cli_ask_and_eval_release_the_sqlite_handle(tmp_path, corpus, golden):
+    data = ingest_live(tmp_path, corpus)
+    assert run(["ask", "How does the alpha module sort lists?", "--data-dir", data]) == 0
+    (data / "keyword.sqlite").unlink()
+    data = ingest_live(tmp_path, corpus)
+    assert run(eval_args(tmp_path, corpus, golden, data)) == 0
+    (data / "keyword.sqlite").unlink()
+    assert run(["ingest", "--corpus", corpus, "--data-dir", data]) == 0
+
+
+def test_cli_closes_connection_when_eval_raises(tmp_path, corpus, golden):
+    data = ingest_live(tmp_path, corpus)
+
+    class Boom(ScriptedLLM):
+        def complete(self, messages):
+            raise RuntimeError("boom")
+
+    class BoomFactory(FakeFactory):
+        def live_llm(self, settings):
+            return Boom()
+
+    with pytest.raises(RuntimeError):
+        run(eval_args(tmp_path, corpus, golden, data), factory=BoomFactory())
+    (data / "keyword.sqlite").unlink()
+
+
+@pytest.mark.parametrize("bad", ["0", "-3", "x"])
+def test_cli_eval_k_must_be_positive(tmp_path, corpus, golden, bad):
+    args = eval_args(tmp_path, corpus, golden, tmp_path / "d", "--k", bad)
+    with pytest.raises(SystemExit) as exc:
+        run(args)
+    assert exc.value.code == 2

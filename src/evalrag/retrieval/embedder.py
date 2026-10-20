@@ -14,6 +14,8 @@ from typing import Literal, Protocol
 import httpx
 import numpy as np
 
+from evalrag.errors import CacheMismatchError
+
 Kind = Literal["document", "query"]
 
 
@@ -107,8 +109,14 @@ class RecordingEmbedder:
         self._vectors: dict[str, np.ndarray] = {}
         if self.cache_path.exists():
             keys, vectors, meta = _load_cache(self.cache_path)
+            cached_model = meta.get("model", "")
+            if model and cached_model and model != cached_model:
+                raise CacheMismatchError(
+                    f"{self.cache_path}: cache was recorded with model {cached_model!r}, "
+                    f"not {model!r}"
+                )
             self._vectors = dict(zip(keys, vectors, strict=True))
-            self.model = self.model or meta.get("model", "")
+            self.model = self.model or cached_model
 
     def embed(self, texts: list[str], kind: Kind = "document") -> np.ndarray:
         if not texts:
@@ -120,6 +128,13 @@ class RecordingEmbedder:
                 missing.setdefault(key, text)
         if missing:
             fresh = self.inner.embed(list(missing.values()), kind=kind)
+            if self._vectors and len(fresh):
+                existing_dim = int(next(iter(self._vectors.values())).shape[0])
+                if int(fresh.shape[1]) != existing_dim:
+                    raise CacheMismatchError(
+                        f"{self.cache_path}: cache has dimension {existing_dim}, "
+                        f"new vectors have dimension {int(fresh.shape[1])}"
+                    )
             for key, vector in zip(missing, fresh, strict=True):
                 self._vectors[key] = vector.astype(np.float16)
         return np.stack([self._vectors[k] for k in keys]).astype(np.float32)

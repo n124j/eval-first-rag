@@ -227,3 +227,36 @@ def test_failed_flush_keeps_previous_file_and_leaves_no_tmp(tmp_path: Path, monk
         rec.flush()
     assert path.read_bytes() == before
     assert sorted(p.name for p in tmp_path.iterdir()) == ["cache.npz"]
+
+
+def test_recording_embedder_model_and_dim_mismatch_raise_and_same_model_extends(tmp_path):
+    from pathlib import Path as _P
+
+    import numpy as _np
+
+    from evalrag.errors import CacheMismatchError
+    from evalrag.retrieval.embedder import RecordingEmbedder
+
+    class Const:
+        def __init__(self, dim):
+            self.dim = dim
+
+        def embed(self, texts, kind="document"):
+            return _np.ones((len(texts), self.dim), dtype=_np.float32)
+
+    cache = _P(tmp_path) / "c.npz"
+    rec = RecordingEmbedder(Const(4), cache, model="m1")
+    rec.embed(["a"])
+    rec.flush()
+    before = cache.read_bytes()
+    with pytest.raises(CacheMismatchError, match="m1.*m2"):
+        RecordingEmbedder(Const(4), cache, model="m2")
+    assert cache.read_bytes() == before
+    same = RecordingEmbedder(Const(4), cache, model="m1")
+    same.embed(["b"])
+    same.flush()
+    assert RecordingEmbedder(Const(4), cache, model="m1").embed(["a", "b"]).shape == (2, 4)
+    wrong = RecordingEmbedder(Const(8), cache, model="m1")
+    with pytest.raises(CacheMismatchError, match="4.*8"):
+        wrong.embed(["c"])
+    assert cache.exists()

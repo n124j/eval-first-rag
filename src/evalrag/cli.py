@@ -1,14 +1,19 @@
 """Command line: ingest, ask, eval and gate."""
 
 import argparse
+import contextlib
+import json
 import os
+import sqlite3
 import sys
-from collections.abc import Mapping
+import zipfile
+from collections.abc import Iterator, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 
 from evalrag.config import ConfigError, Settings
 from evalrag.corpus import CorpusError, load_corpus
+from evalrag.errors import CacheMismatchError, IndexDataError
 from evalrag.evals.dataset import DatasetError, load_golden
 from evalrag.evals.gate import (
     BaselineError,
@@ -50,6 +55,13 @@ RUNTIME_ERRORS = (
     MetricsError,
     EmptyIndex,
     ConfigError,
+    CacheMismatchError,
+    IndexDataError,
+    OSError,
+    sqlite3.Error,
+    UnicodeDecodeError,
+    zipfile.BadZipFile,
+    json.JSONDecodeError,
 )
 
 
@@ -77,6 +89,16 @@ class ComponentFactory:
         if record is not None:
             return RecordingClient(inner, record)
         return inner
+
+
+def _positive_int(text: str) -> int:
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"must be a positive integer, got {text!r}") from None
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"must be a positive integer, got {text!r}")
+    return value
 
 
 def _path(value: str | None) -> Path | None:
@@ -116,7 +138,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--metrics-out", required=True)
     p.add_argument("--corpus", default="corpus")
     p.add_argument("--data-dir")
-    p.add_argument("--k", type=int, default=5)
+    p.add_argument("--k", type=_positive_int, default=5)
     _exclusive(p, "--record-llm", "--replay-llm")
     _exclusive(p, "--record-embeddings", "--replay-embeddings")
     p.add_argument("--model")
@@ -149,17 +171,21 @@ def _cmd_ingest(args, env, factory) -> int:
     return 0
 
 
-def _pipeline(settings, data_dir, k, embedder, llm) -> RagPipeline:
+@contextlib.contextmanager
+def open_pipeline(settings, data_dir, k, embedder, llm) -> Iterator[RagPipeline]:
     retriever, chunks_by_id = open_retriever(settings, data_dir, embedder)
-    return RagPipeline(retriever, llm, chunks_by_id, k)
+    try:
+        yield RagPipeline(retriever, llm, chunks_by_id, k)
+    finally:
+        retriever.close()
 
 
 def _cmd_ask(args, env, factory) -> int:
     settings = _settings(env, args.replay_llm, args.replay_embeddings)
     embedder = factory.embedder(settings, None, _path(args.replay_embeddings))
     llm = factory.llm(settings, _path(args.record_llm), _path(args.replay_llm))
-    pipeline = _pipeline(settings, _data_dir(args, settings), settings.top_k, embedder, llm)
-    answer = pipeline.ask(args.question)
+    with open_pipeline(settings, _data_dir(args, settings), settings.top_k, embedder, llm) as p:
+        answer = p.ask(args.question)
     _flush(llm)
     print(answer.text)
     for citation in answer.citations:
@@ -177,8 +203,8 @@ def _cmd_eval(args, env, factory) -> int:
     llm = factory.llm(settings, _path(args.record_llm), _path(args.replay_llm))
     known = {doc.doc_id for doc in load_corpus(Path(args.corpus))}
     items = load_golden(Path(args.golden), known_sources=known)
-    pipeline = _pipeline(settings, _data_dir(args, settings), args.k, embedder, llm)
-    result = run_eval(make_sut(pipeline), items, k=args.k)
+    with open_pipeline(settings, _data_dir(args, settings), args.k, embedder, llm) as pipeline:
+        result = run_eval(make_sut(pipeline), items, k=args.k)
     _flush(llm)
     _flush(embedder)
 
